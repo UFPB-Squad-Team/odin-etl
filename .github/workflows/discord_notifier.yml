@@ -1,0 +1,30 @@
+name: Discord Notifier
+
+on:
+    pull_request:
+        types: [opened, reopened]
+
+jobs:
+    notify:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Send notification to Discord
+              uses: tsickert/discord-webhook@v5.5.0
+              with:
+                  webhook-url: ${{ secrets.DISCORD_WEBHOOK_URL }}
+                  content: ":bell: **New Pull Request Opened!**"
+                  embed-title: "${{ github.event.pull_request.title }}"
+                  embed-url: "${{ github.event.pull_request.html_url }}"
+                  embed-color: "5814783"
+                  embed-author-name: "${{ github.actor }}"
+                  embed-author-url: "https://github.com/${{ github.actor }}"
+                  embed-author-icon-url: "https://github.com/${{ github.actor }}.png?size=64"
+                  embed-description: |
+                      :bust_in_silhouette: **Author:** ${{ github.actor }}
+                      :bookmark_tabs: **Source Branch:** `${{ github.head_ref }}`
+                      :arrow_right: **Target Branch:** `${{ github.base_ref }}`
+                      :speech_balloon: **Description:**
+                      > ${{ github.event.pull_request.body || 'No description provided.' }}
+
+                      [ **View Pull Request**](${{ github.event.pull_request.html_url }})
+                  embed-footer-text: " Project ODIN | Automated PR Notification"
