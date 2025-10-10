@@ -8,14 +8,15 @@ jobs:
     notify:
         runs-on: ubuntu-latest
         steps:
-            - name: Send notification to Discord
+            - name: Notify when PR is opened or reopened
+              if: ${{ github.event.action == 'opened' || github.event.action == 'reopened' }}
               uses: tsickert/discord-webhook@v5.5.0
               with:
                   webhook-url: ${{ secrets.DISCORD_WEBHOOK_URL }}
                   content: ":bell: **New Pull Request Opened!**"
                   embed-title: "${{ github.event.pull_request.title }}"
                   embed-url: "${{ github.event.pull_request.html_url }}"
-                  embed-color: "5814783"
+                  embed-color: "5814783" 
                   embed-author-name: "${{ github.actor }}"
                   embed-author-url: "https://github.com/${{ github.actor }}"
                   embed-author-icon-url: "https://github.com/${{ github.actor }}.png?size=64"
@@ -27,4 +28,24 @@ jobs:
                       > ${{ github.event.pull_request.body || 'No description provided.' }}
 
                       [ **View Pull Request**](${{ github.event.pull_request.html_url }})
-                  embed-footer-text: " Project ODIN | Automated PR Notification"
+                  embed-footer-text: " Project ODIN • Automated PR Notification"
+
+            - name: Notify when PR is merged
+              if: ${{ github.event.action == 'closed' && github.event.pull_request.merged == true }}
+              uses: tsickert/discord-webhook@v5.5.0
+              with:
+                  webhook-url: ${{ secrets.DISCORD_WEBHOOK_URL }}
+                  content: ":tada: **Pull Request Merged Successfully!**"
+                  embed-title: "${{ github.event.pull_request.title }}"
+                  embed-url: "${{ github.event.pull_request.html_url }}"
+                  embed-color: "3066993" 
+                  embed-author-name: "${{ github.actor }}"
+                  embed-author-url: "https://github.com/${{ github.actor }}"
+                  embed-author-icon-url: "https://github.com/${{ github.actor }}.png?size=64"
+                  embed-description: |
+                      :bust_in_silhouette: **Merged by:** ${{ github.actor }}
+                      :twisted_rightwards_arrows: **From:** `${{ github.head_ref }}`
+                      :arrow_heading_up: **Into:** `${{ github.base_ref }}`
+
+                      [ **View Pull Request**](${{ github.event.pull_request.html_url }})
+                  embed-footer-text: " Project ODIN • Merge Notification"
