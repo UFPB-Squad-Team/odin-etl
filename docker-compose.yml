@@ -17,7 +17,7 @@ services:
       - .env 
     depends_on:
       - db 
-    command: tail -f /dev/null
+    command: ["/bin/sh", "-c", "echo 'ETL service is idle. Replace this command with your ETL process.' && sleep infinity"]
 
 volumes:
   mongo_data:
