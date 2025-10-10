@@ -1,0 +1,24 @@
+name: Docker Build Sanity Check
+
+on:
+    pull_request:
+        branches: ["main", "development"]
+    workflow_dispatch:
+
+jobs:
+    build-check:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: 1. Checkout do Código
+              uses: actions/checkout@v4
+
+            - name: 2. Configurar o Docker Buildx
+              uses: docker/setup-buildx-action@v3
+
+            - name: 3. Construir a imagem Docker para validar
+              uses: docker/build-push-action@v5
+              with:
+                  context: .
+                  push: false
+                  load: false

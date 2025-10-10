@@ -1,0 +1,23 @@
+version: "3.8"
+
+services:
+  db:
+    image: mongo:7.0
+    ports:
+      - "27017:27017" 
+    volumes:
+      - mongo_data:/data/db
+
+  etl:
+    build: . 
+    volumes:
+      - ./src:/app/src
+      - ./config:/app/config
+    env_file:
+      - .env 
+    depends_on:
+      - db 
+    command: ["/bin/sh", "-c", "echo 'ETL service is idle. Replace this command with your ETL process.' && sleep infinity"]
+
+volumes:
+  mongo_data:
