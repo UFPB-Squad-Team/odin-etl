@@ -27,4 +27,4 @@ jobs:
                       > ${{ github.event.pull_request.body || 'No description provided.' }}
 
                       [ **View Pull Request**](${{ github.event.pull_request.html_url }})
-                  embed-footer-text: " Project ODIN • Automated PR Notification"
+                  embed-footer-text: " Project ODIN | Automated PR Notification"
