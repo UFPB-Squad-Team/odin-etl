@@ -1,0 +1,139 @@
+# Sistema operacional
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# Editores/IDE
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.iml
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+ENV/
+dist/
+build/
+.eggs/
+*.egg-info/
+pip-wheel-metadata/
+wheels/
+.site/
+.pytest_cache/
+.mypy_cache/
+.pyre/
+.pytype/
+.tox/
+.nox/
+.hypothesis/
+.ruff_cache/
+.ipynb_checkpoints/
+.python-version
+__pypackages__/
+.pdm-build/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Node/JS (caso use scripts de ETL em JS/TS)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Java/Scala (comum em Spark)
+*.class
+target/
+.project
+.classpath
+.settings/
+.scala_dependencies
+.metals/
+
+# Logs e temporários
+logs/
+*.log
+tmp/
+temp/
+.tmp/
+.cache/
+cache/
+checkpoints/
+output/
+outputs/
+
+# Dados (estruturas comuns em ETL)
+data/
+!data/.gitkeep
+!data/README.md
+data/raw/
+data/interim/
+data/processed/
+data/external/
+
+# Bancos locais
+*.sqlite
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
+derby.log
+metastore_db/
+
+# Airflow (artefatos locais)
+airflow/airflow.db
+airflow/airflow.cfg
+airflow/airflow-webserver.pid
+airflow/logs/
+
+# dbt
+dbt_packages/
+dbt_modules/
+
+# Great Expectations
+great_expectations/uncommitted/
+
+# Spark
+.sparkStaging/
+spark-warehouse/
+
+# Variáveis de ambiente e segredos
+.env
+.env.*
+*.env
+.secrets/
+secrets/
+*.secret
+*.secrets
+*.key
+*.pem
+*.crt
+*.pfx
+*.jks
+*.keytab
+
+# Docker
+.docker/
+docker-compose.override.yml
+
+# Terraform (infra auxiliar de dados)
+.terraform/
+*.tfstate
+*.tfstate.*
+
+# Backups/artefatos diversos
+*.bak
+*.tmp
+*.orig
+*.old
+*.pid
