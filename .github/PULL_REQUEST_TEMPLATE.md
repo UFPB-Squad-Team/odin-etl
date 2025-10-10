@@ -20,5 +20,4 @@ Fixes #24 — [View issue](https://github.com/OWNER/REPO/issues/24)
 
 _Before opening this PR, please confirm you have completed the following steps:_
 
-- [ ] I have tested my changes locally.
 - [ ] I have read and filled out the sections above.
