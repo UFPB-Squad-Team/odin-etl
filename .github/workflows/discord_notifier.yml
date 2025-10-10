@@ -2,7 +2,7 @@ name: Discord Notifier
 
 on:
     pull_request:
-        types: [opened, reopened]
+        types: [opened, reopened, closed]
 
 jobs:
     notify:
