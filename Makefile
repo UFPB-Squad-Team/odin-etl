@@ -26,23 +26,18 @@ restart: ## Restarts all containers
 shell: ## Opens an interactive shell (bash) in the ETL container
 	docker-compose exec etl bash
 
-run-cnpj: ## Runs the full pipeline for Receita Federal (CNPJ) data
-	docker-compose run --rm etl python src/jobs/pipeline_cnpj.py
+run-geocode-extract: ## Runs ONLY the geocode extract job
+	docker-compose run --rm etl python src/jobs/01_education/geocode_pipeline/extract.py
 
-run-datasus: ## Runs the full pipeline for DATASUS data
-	docker-compose run --rm etl python src/jobs/pipeline_datasus.py
+run-geocode-extract: ## Runs ONLY the geocode transform job
+	docker-compose run --rm etl python src/jobs/01_education/geocode_pipeline/transform.py
 
-run-inep: ## Runs the full pipeline for INEP data (School Census, etc.)
-	docker-compose run --rm etl python src/jobs/pipeline_inep.py
+run-geocode-extract: ## Runs ONLY the geocode load job
+	docker-compose run --rm etl python src/jobs/01_education/geocode_pipeline/load.py
 
-extract-cnpj: ## Runs ONLY the EXTRACTION step of the CNPJ pipeline
-	docker-compose run --rm etl python src/jobs/pipeline_cnpj.py extract
+run-geocode-extract: ## Runs the full geocode pipeline (extract, transform, load)
+	docker-compose run --rm etl python src/jobs/01_education/geocode_pipeline/main.py
 
-transform-cnpj: ## Runs ONLY the TRANSFORMATION step of the CNPJ pipeline
-	docker-compose run --rm etl python src/jobs/pipeline_cnpj.py transform
-
-load-cnpj: ## Runs ONLY the LOAD step of the CNPJ pipeline
-	docker-compose run --rm etl python src/jobs/pipeline_cnpj.py load
 
 help: ## Shows this help message
 	@echo "Available commands:"
