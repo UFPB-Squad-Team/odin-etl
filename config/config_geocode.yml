@@ -1,0 +1,41 @@
+s3:
+  bucket_name: "alpargatas-insights-datalake"
+  raw_folder: "ODIN/raw"
+  intermediate_folder: "ODIN/intermediate"
+  processed_folder: "ODIN/processed"
+
+ingestion_sources:
+  censo_escolar:
+    url: "https://download.inep.gov.br/dados_abertos/microdados_censo_escolar_2023.zip"
+    output_filename: "censo_2023.zip"
+    target_filename_in_zip: "microdados_ed_basica_2023.csv"
+
+paths:
+  raw_municipios_brasileiros: "ODIN/intermediate/escolas_nordeste.parquet"
+  intermediate_escolas_nordeste: "ODIN/processed/escolas_nordeste_geocoded.parquet"
+
+geocode_pipeline:
+  extract:
+    # Parâmetros para filtrar o censo escolar
+    filtro_uf: ["MA", "PI", "CE", "RN", "PB", "PE", "AL", "SE", "BA"]
+    filtro_dependencia_adm: [1, 2, 3] # Federal, Estadual, Municipal
+    filtro_situacao_funcionamento: 1 # Em atividade
+    # Parâmetros para leitura do CSV
+    csv_delimiter: ";"
+    csv_encoding: "latin-1"
+
+  transform:
+      # Colunas de endereço para criar o df_endereco
+      colunas_endereco: 
+        - 'CO_ENTIDADE'   # ID da escola
+        - 'SG_UF'
+        - 'DS_ENDERECO'
+        - "NU_ENDERECO"
+        - 'NO_BAIRRO'
+        - 'CO_CEP'
+        - 'NO_MUNICIPIO'
+      # Coluna final que será usada no Google API
+      coluna_endereco_final: 'endereco_completo'
+      
+      # Path para salvar o progresso (atualmente local para desenvolvimento/testes locais)
+      checkpoint_output_path: "data/escolas_nordeste_geocoded.parquet"
