@@ -1,4 +1,3 @@
-Com certeza\! Aqui está uma documentação detalhada do processo de transformação (transform) implementado no seu script. Este documento é perfeito para ser incluído na sua Pull Request (PR) ou na Wiki interna do projeto.
 
 ---
 
