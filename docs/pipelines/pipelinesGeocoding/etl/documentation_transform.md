@@ -1,23 +1,19 @@
 
----
+## **Documentação: Pipeline de Escolas \- Transform (Transformação e Geocodificação)**
 
-# **Documentação: Job de Transformação (Geocodificação)**
+### **Objetivo Principal**
 
-## **1\. Visão Geral e Propósito**
+O script (transform.py) é a segunda etapa do nosso pipeline de dados de escolas. O objetivo é usar a lista de escolas (previamente filtrada pela etapa extract) e **descobrir a latitude e a longitude exatas de cada uma**, usando os endereços.
 
-Este script representa a etapa de **Transformação** do pipeline de dados das escolas. Seu principal objetivo é enriquecer os dados brutos (extraídos na etapa anterior) com informações de geolocalização (latitude e longitude).
+Em termos simples: ele transforma um endereço (como "Rua da Escola, 123, Recife, PE") em coordenadas de mapa (como \-16.059°, \-45.156°).
 
-Para fazer isso, o script:
+### **Como Funciona: O Processo Passo a Passo**
 
-1. Lê os dados consolidados da camada intermediate do S3.  
-2. Constrói um endereço completo e padronizado para cada escola.  
-3. Otimiza o processo **removendo endereços duplicados** para evitar chamadas desnecessárias e reduzir custos com a API.  
-4. Utiliza a API **GoogleV3 (Geocoding)** para obter as coordenadas de cada endereço único.  
-5. Executa a geocodificação em **paralelo** usando pandarallel para acelerar massivamente o processamento.  
-6. Implementa um sistema de **checkpoint local** para que o job possa ser interrompido e retomado sem perder progresso.  
-7. Salva o resultado final (dados das escolas \+ latitude/longitude) na camada processed do S3.
+O script é desenhado para ser eficiente e, acima de tudo, **robusto**. Ele tem mecanismos para não perder o progesso atual se falhar no meio do processo.
 
-## **2\. Pré-requisitos para Execução**
+Aqui está o fluxo de execução:
+
+## **1\. Pré-requisitos para Execução**
 
 Antes de rodar este script, garanta que seu ambiente atende aos seguintes requisitos:
 
@@ -27,76 +23,63 @@ Antes de rodar este script, garanta que seu ambiente atende aos seguintes requis
 
 2. **Credenciais AWS**: O ambiente de execução deve ter permissão de leitura e escrita no bucket S3 configurado. Isso geralmente é feito configurando variáveis de ambiente (como AWS\_ACCESS\_KEY\_ID, AWS\_SECRET\_ACCESS\_KEY, etc.) ou através de uma Role (ex: em uma instância EC2 ou pod Kubernetes). A função get\_s3\_storage\_options() gerencia isso.  
 3. **Dados de Entrada**: O arquivo da etapa de "Extract" (ex: intermediate\_escolas\_nordeste.parquet) deve existir na camada intermediate do S3.  
-4. **Bibliotecas Python**: Todas as bibliotecas listadas nos import devem estar instaladas (ex: pandas, pandarallel, python-dotenv, geopy, s3fs/fsspec).
+4. **Bibliotecas Python**: Todas as bibliotecas listadas nos import devem estar instaladas (ex: pandas, pandarallel, python-dotenv, geopy, s3fs/fsspec)
 
-## **3\. Fluxo de Execução (Função run())**
+#### **2\.  Leitura dos Dados**
 
-O script é orquestrado pela função run(), que segue estes passos:
+*Logo após, o script vai ao S3 (na camada intermediaria) e lê o aqruivo escolas\_nordeste.parquet, que foi o resultado da etapa de extração (extract). Este arquivo contém todas as escolas que queremos processar.
 
-### **Passo 1: Configuração e Leitura**
+#### **3\.  Preparação dos Endereços**
 
-* Carrega as configurações do projeto (load\_config()).  
-* Obtém a chave da API do Google de forma segura (\_get\_api\_key()).  
-* Lê o arquivo Parquet da camada intermediate do S3 para um DataFrame pandas (df\_full).
+* Não podemos simplesmente enviar o endereço de qualquer forma para o Google. Esta etapa faz uma "limpeza":  
+  1. visita as várias colunas dos endereços(Rua, Número, Bairro, Município, UF, CEP).  
+  2. Junta tudo em uma única string de texto, limpa e formatada (ex: DS\_ENDERECO, NU\_ENDERECO, NO\_BAIRRO, NO\_MUNICIPIO, SG\_UF, CO\_CEP).  
+  3. **Otimização crucial:** nessa etapa de limpeza, remove-se endereços duplicados. Se 10 escolas diferentes estiverem registadas exatamente no mesmo endereço (por exemplo, no mesmo complexo educacional), só precisamos requisitar ao Google esse endereço apeans *uma vez*. Isto poupa muito tempo e dinheiro (custos de API).
 
-### **Passo 2: Preparação dos Endereços**
+#### **4\.  O Mecanismo de "Checkpoint"**
 
-* Chama a função create\_address\_dataframe() para:  
-  1. Selecionar apenas as colunas de endereço necessárias.  
-  2. Concatenar as partes (Rua, Número, Bairro, Município, UF, CEP) em uma única string de endereço (coluna\_endereco\_final).  
-  3. **Otimização-Chave:** Remover todas as linhas com endereços duplicados. Isso garante que só geocodificamos cada endereço *uma única vez*.
+* Antes de começar o trabalho pesado, o script verifica se existe um arquivo local chamado geocoding\_checkpoint.parquet.  
+* **Se o documento existir:** O script lê-o e vê todas os endereços que *já foram processadas* com sucesso num momento anterior. Ele compara essa lista com a lista total de endereços e processa *apenas* as que são novas.  
+* **Se não existir:** Tudo bem, ele assume que é a primeira vez que está rodadndo e processa a lista completa.
 
-### **Passo 3: Gerenciamento de Progresso (Checkpoint)**
+Porquê isso é tão importante?  
+A geocodificação pode demorar horas. Se o script rodar durante 3 horas, processar 50.000 endereços e depois falhar (por exemplo, a internet cair), não queremos começar do zero. Com esse mecanismo, da próxima vez que rodarmos o script, ele vai se "lembrar" das 50.000 que já fez e começar a partir daí.
 
-* Chama a função manage\_progress() para verificar se um arquivo de checkpoint local (ex: data/checkpoints/geocoding\_progress.parquet) já existe.  
-* **Se o checkpoint existe**:  
-  * Ele é lido (df\_ja\_processado).  
-  * O script identifica quais endereços *já foram* geocodificados.  
-  * O DataFrame de entrada é filtrado, deixando apenas os endereços *ainda não processados* (df\_para\_processar).  
-* **Se o checkpoint não existe**:  
-  * O script começa do zero. df\_ja\_processado fica vazio e df\_para\_processar contém todos os endereços únicos.
+#### **5\.  A Geocodificação Paralela**
 
-### **Passo 4: Geocodificação Paralela**
+* Agora que ele tem a lista de endereços *novos* para processar, ele começa o trabalho.  
+* Ele usa a biblioteca pandarallel, o que significa que, em vez de processar um endereço de cada vez (em série), ele processa várias ao mesmo tempo (em paralelo), usando todos os núcleos do processador do computador.  
+* Para cada endereço, ele:  
+  1. Chama a função geocode\_google\_process.  
+  2. Envia o endereço para a API do Google.  
+  3. Espera uma pequena pausa (0.05s) para não sobrecarregar a API.  
+  4. Recebe de volta a latitude e longitude.  
+  5. Se o Google não encontrar o endereço, ele simplesmente retorna None (vazio) e segue em frente.
 
-* Se o df\_para\_processar não estiver vazio, o script inicia a geocodificação:  
-  1. **functools.partial**: É usada para criar uma "nova" função (geocode\_with\_key) que "congela" o argumento api\_key. Isso é necessário para passar a chave para a função que será executada em paralelo.  
-  2. **parallel\_apply**: A pandarallel aplica a função geocode\_with\_key em múltiplos processos/CPUs, acelerando drasticamente o job.  
-  3. A função geocode\_google\_process (o "worker" paralelo) retorna uma pd.Series com \[latitude, longitude\], que é desempacotada em novas colunas no DataFrame df\_para\_processar.
+#### **6\.  Salvar o Progresso (Checkpoint)**
 
-### **Passo 5: Atualização do Checkpoint**
+* Assim que os novos endereços são processados, o script junta os novos resultados com os resultados antigos (que ele leu do checkpoint no passo 4).  
+* Depois, ele **reescreve o ficheiro geocoding\_checkpoint.parquet** localmente com a lista completa e atualizada.
 
-* Os resultados novos (df\_para\_processar) são concatenados com os resultados antigos (df\_ja\_processado).  
-* O DataFrame completo e atualizado (df\_final) é salvo localmente no arquivo de checkpoint. Se o script falhar ou for interrompido agora, ele recomeçará deste ponto na próxima execução.
+#### **7\. Envio Final para o S3**
 
-### **Passo 6: Carregamento Final (Load)**
+* Com o trabalho de geocodificação terminado , o script pega no DataFrame final e completo.  
+* Ele salva este resultado na camada processed do S3, com o nome escolas\_nordeste\_geocoded.parquet.  
+* Este é o "produto final": uma tabela com todas as escolas e as suas coordenadas geográficas.
 
-* O DataFrame final, contendo todos os endereços únicos geocodificados, é salvo em formato Parquet na camada processed do S3 (ex: s3://bucket/processed/escolas\_nordeste\_geocoded.parquet).
+### **Resumo das Funções Auxiliares**
 
-## **4\. Análise das Funções Auxiliares**
+* \_get\_api\_key(): Apenas carrega e valida a chave da API do Google.  
+* geocode\_google\_process(endereço, chave): A função "operária". É ela que, para *um* endereço, fala com o Google e devolve a lat/lon. É chamada milhares de vezes em paralelo.  
+* create\_address\_dataframe(df): A função de "limpeza". Pega no DataFrame gigante e devolve uma lista de endereços únicos.  
+* manage\_progress(df\_total, caminho\_checkpoint): A função "cérebro". Decide quais os endereços que precisam ser processadas e quais já estão prontos.
 
-* \_get\_api\_key()  
-  * **O que faz**: Carrega o .env e busca a variável GOOGLE\_API\_KEY.  
-  * **Por que existe**: Isola a lógica de gerenciamento de segredos e falha rapidamente (raise ValueError) se a chave não for encontrada.  
-* geocode\_google\_process(endereco, api\_key)  
-  * **O que faz**: Função "worker" que executa em cada processo paralelo. Recebe *um* endereço e a chave.  
-  * **Design**:  
-    * Importa GoogleV3 e time *dentro* da função. Isso é uma prática recomendada pela pandarallel para evitar problemas de serialização de objetos complexos entre os processos.  
-    * Usa geopy.geocoders.GoogleV3 para consultar a API.  
-    * time.sleep(0.05): Adiciona uma pequena pausa. (Nota: O cliente GoogleV3 do geopy já gerencia o rate limiting (QPS) automaticamente, mas isso pode ser uma segurança extra).  
-    * Retorna pd.Series(\[lat, lon\]) em caso de sucesso ou pd.Series(\[None, None\]) em caso de falha, permitindo que o .apply funcione corretamente.  
-* create\_address\_dataframe(df, columns, final\_col\_name)  
-  * **O que faz**: Limpa e prepara os dados de endereço.  
-  * **Por que existe**: Centraliza a lógica de criação da "chave" de geocodificação (o endereço completo) e, o mais importante, **deduplica** os dados antes de gastar dinheiro com a API.  
-* manage\_progress(df\_input, checkpoint\_path, address\_col\_name)  
-  * **O que faz**: Implementa a lógica de "resumo" (resume).  
-  * **Por que existe**: Geocodificação de dezenas de milhares de endereços pode levar horas e é cara. Se o script falhar na metade, esta função garante que não vamos reprocessar (e pagar por) endereços que já temos a resposta.
+## **8\. Como Executar**
 
-## **5\. Como Executar**
-
-1. Certifique-se de que os **Pré-requisitos** (passo 2\) estão atendidos.  
+1. Certifique-se de que os **Pré-requisitos** (passo 1\) estão atendidos.  
 2. Navegue até o diretório raiz do projeto.  
 3. Execute o script Python (assumindo que este arquivo se chame transform\_geocode.py e esteja dentro de src/pipelines/):  
-   Bash  
+   ```Bash
    python \-m src.pipelines.transform\_geocode
 
 4. Acompanhe o progresso pelo log no console e pela barra de progresso do pandarallel.
