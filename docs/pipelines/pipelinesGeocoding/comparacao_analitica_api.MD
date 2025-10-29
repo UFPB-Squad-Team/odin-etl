@@ -1,41 +1,39 @@
-Relatório Técnico - Ferramentas de Geocodificação
+Technical Report - Geocoding Tools
 
-Este relatório apresenta um levantamento e análise comparativa de APIs e bibliotecas de geocodificação, considerando opções open-source, pagas e gratuitas. O objetivo é identificar as soluções mais adequadas para projetos que envolvem localização geográfica e integração com dados espaciais, como o caso da geocodificação de escolas no estado da Paraíba.
+This report presents a survey and comparative analysis of geocoding APIs and libraries, considering open-source, paid, and free options. The goal is to identify the most suitable solutions for projects involving geographic location and spatial data integration, such as geocoding schools in the state of Paraíba.
 
-# Levantamento de Ferramentas e APIs de Geocodificação
+# Survey of Geocoding Tools and APIs
 
-Para atender à necessidade de uma solução sustentável, foram identificadas diversas ferramentas geocódigos, divididas entre soluções Open-Source e Auto-Hospedáveis e soluções Comerciais e Fremium. Dentre as opções open-source estão: o **Nominatim (OpenStreetMap)**, um software e serviço público amplamente utilizado e ideal para grande volume de requisições sem custos de licença; o **Pelias**, um geocoder open-source baseado em Elasticsearch, excelente para implementação de _self-hosting_ e controle total dos dados; e o **Photon**, mantido pela Komoot e baseado em dados do OpenStreetMap, conhecido por sua alta velocidade de pesquisa. Já as opções comerciais incluem o **Google Maps Geocoding API** (referência de alta precisão, mas com modelo _pay-as-you-go_), o **Mapbox Geocoding API** (alternativa comercial robusta e concorrente direto do Google, com planos gratuitos limitados), o **OpenCage API** (serviço comercial baseado em dados abertos, com planos pagos e um _free tier_ previsível), e o **LocationIQ e MapQuest** (alternativas comerciais de baixo custo e fácil integração, baseadas no OpenStreetMap, representando uma solução híbrida de baixo custo).
+To meet the need for a sustainable solution, several geocoding tools were identified, divided between Open-Source / Self-Hostable solutions and Commercial / Freemium solutions. Among the open-source options are: **Nominatim (OpenStreetMap)**, a widely used public software and service ideal for high-volume requests without licensing costs; **Pelias**, an open-source geocoder based on Elasticsearch, excellent for self-hosting and full control of data; and **Photon**, maintained by Komoot and based on OpenStreetMap data, known for its high search speed. Commercial options include the **Google Maps Geocoding API** (reference for high accuracy, but with a pay-as-you-go model), **Mapbox Geocoding API** (robust commercial alternative and direct competitor to Google, with limited free plans), **OpenCage API** (commercial service built on open data, with paid plans and a predictable free tier), and **LocationIQ and MapQuest** (low-cost commercial alternatives that are easy to integrate, based on OpenStreetMap, representing a hybrid low-cost solution).
 
-# Matriz Comparativa das Ferramentas
+# Comparative Matrix of Tools
 
-| **Provedor** | **Tipo** | **Custo** | **Precisão/Cobertura** | **Limites/Quota** | **Complexidade** |     |
-| --- | --- | --- | --- | --- | --- | --- |
-| Nominatim (OSM) | Open-source | Grátis (restrições públicas) | Boa, depende de OSM | Uso público limitado | Baixa |     |
-| Pelias | Open-source | Grátis (infra custo) | Depende dos dados importados | Sem limites (self-host) | Alta |     |
-| Photon | Open-source | Grátis (infra custo) | Boa para busca e typeahead | Sem limites (self-host) | Média |     |
-| Google Maps | Comercial | Pago por uso | Excelente precisão global | Altos limites pagos | Baixa |     |
-| Mapbox | Comercial | Freemium | Muito boa | Batch e limites razoáveis | Baixa-média |     |
-| OpenCage | Comercial | Planos mensais | Boa, combina várias fontes | Limites brandos | Baixa |     |
-| nIQ / MapQuest | Comercial | Free tier + planos pagos | Boa | Limites generosos | Baixa |     |
+| **Provider**         | **Type**    | **Cost**                      | **Accuracy/Coverage**        | **Limits/Quota**           | **Complexity**   |     |
+| -------------------- | ----------- | ----------------------------- | ---------------------------- | -------------------------- | ---------------- | --- |
+| Nominatim (OSM)      | Open-source | Free (public usage restrictions) | Good, depends on OSM         | Public usage limits        | Low              |     |
+| Pelias               | Open-source | Free (infrastructure cost)    | Depends on imported data     | No limits (self-host)      | High             |     |
+| Photon               | Open-source | Free (infrastructure cost)    | Good for search and typeahead| No limits (self-host)      | Medium           |     |
+| Google Maps          | Commercial  | Pay-per-use                   | Excellent global accuracy    | High paid limits           | Low              |     |
+| Mapbox               | Commercial  | Freemium                      | Very good                   | Batch and reasonable limits| Low–Medium       |     |
+| OpenCage             | Commercial  | Monthly plans                 | Good, combines multiple sources | Moderate limits         | Low              |     |
+| LocationIQ / MapQuest| Commercial  | Free tier + paid plans        | Good                        | Generous limits            | Low              |     |
 
-O
+# Drawbacks of Adopting Each API
 
-# Pontos negativos ao adotar cada uma das API's
+**Nominatim (OSM)** has the main difficulty of strict public usage restrictions, limiting the number of requests and causing unstable performance under high demand. **Pelias**, while open-source and scalable, requires dedicated infrastructure and complex configuration with Elasticsearch, plus continuous maintenance of local data, which raises technical deployment costs. **Photon**, also based on OpenStreetMap data, requires hosting and regular database updates to maintain accuracy, which implies constant operational effort. The **Google Maps Geocoding API** is the most precise and easiest to use, but faces the greatest obstacle in high per-request cost and the legal risk of violating Terms of Service by attempting to circumvent the free usage limit with multiple accounts. **Mapbox** offers good accuracy and a modern interface, but its free tier is limited and costs grow quickly as usage increases. **OpenCage** combines various open sources and is easy to integrate, but shows lower accuracy in rural areas and has fixed monthly costs that may make it unfeasible for low-budget projects. Finally, **LocationIQ / MapQuest** is a low-cost commercial option with generous limits, but depends on stable connectivity and can suffer performance degradation during usage peaks, which may compromise reliability under heavy load.
 
-O **Nominatim (OSM)** apresenta como principal dificuldade suas severas restrições de uso em servidores públicos, limitando o número de requisições e tornando o desempenho instável em cenários de alta demanda. O **Pelias**, embora seja open-source e escalável, exige infraestrutura própria e configuração complexa com Elasticsearch, além de manutenção contínua dos dados locais, o que eleva o custo técnico de implantação. O **Photon**, também baseado em dados do OpenStreetMap, requer hospedagem e atualizações regulares da base de dados para manter a precisão, o que implica esforço operacional constante. Já o **Google Maps Geocoding API** é a solução mais precisa e simples de usar, porém enfrenta o maior obstáculo no custo elevado por requisição e no risco jurídico de violar os Termos de Uso ao tentar contornar o limite gratuito com múltiplas contas. O **Mapbox** oferece boa precisão e interface moderna, mas seu plano gratuito é restrito e os custos crescem rapidamente conforme o volume de uso aumenta. O **OpenCage** combina diversas fontes abertas e é fácil de integrar, contudo apresenta menor precisão em áreas rurais e custos fixos mensais, o que pode inviabilizar projetos de baixo orçamento. Por fim, o **LocationIQ / MapQuest** representa uma opção comercial de baixo custo e limites generosos, mas depende de conectividade estável e sofre limitações de desempenho durante picos de uso, o que pode comprometer sua confiabilidade em ambientes de alta carga.
+The Google Geocoding API Dilemma
 
-**O Dilema da API Google Geocoding**
+The preference for Google's API is technically justified by its effectiveness and simplicity of use and by the progress already achieved by the team. The technical infeasibility of switching APIs is evident given the reengineering cost and learning curve of an alternative.
 
-A preferência pela API do Google é tecnicamente justificada por sua **eficácia, simplicidade de uso** e pelos avanços introdutórios já conquistados pela equipe. A inviabilidade técnica de uma mudança de API é evidente, dado o custo de reengenharia e a curva de aprendizado de uma alternativa.
+However, this dependency conflicts with a critical cost barrier: the free usage limit of $200 (one-time fixed credit) was quickly exhausted just considering the demand from public schools, indicating the current model is unviable for the full regional scope.
 
-No entanto, a dependência dessa solução se choca com uma **barreira de custo crítica**: o limite de uso gratuito de **\$200 (crédito fixo único)** foi rapidamente esgotado, apenas considerando a demanda das escolas públicas, o que sinaliza a inviabilidade do modelo atual para o escopo regional completo.
+Compliance and Sustainability Risk
 
-**Risco de Compliance e Sustentabilidade**
+To bypass the limit, the proposed strategy of creating multiple user accounts to fragment the free credit entails a serious compliance risk. This tactic violates Google's Terms of Service (ToS), generating complexity in managing multiple API keys and, more seriously, exposing the project to legal vulnerability.
 
-Para contornar o limite, a estratégia proposta de criar múltiplas contas de usuário para pulverizar o custo gratuito implica um **sério risco de compliance**. Essa tática viola os **Termos de Uso (ToS) da Google**, gerando complexidade de gerenciamento de múltiplas chaves de API e, mais gravemente, expondo o projeto a uma vulnerabilidade jurídica.
+The main conflict in this hypothetical debate is that current technical efficiency threatens the ODIN project's sustainability and commercial future. Potential ToS violations could prevent contract signing and sale of the application to interested organizations, turning a technically viable decision into a strategic and legal obstacle to scalability and long-term success.
 
-O principal ponto de conflito neste debate hipotético é que a eficiência técnica atual ameaça a **sustentabilidade e o futuro comercial** do ODIN. A potencial violação dos ToS pode inviabilizar a celebração de contratos e a venda da aplicação a organizações interessadas, transformando uma decisão técnica viável em um obstáculo estratégico e legal intransponível para a escalabilidade e o sucesso de longo prazo do projeto.
+The debate therefore centers on prioritizing: (A) maintaining the Google API, accepting the compliance risk and future commercial infeasibility, or (B) urgently pursuing an alternative geocoder with predictable costs and clear terms of use, ensuring ODIN’s longevity and contractability.
 
-O debate, portanto, se concentra em priorizar: **(A) a manutenção da API do Google**, aceitando o risco de compliance e a inviabilidade comercial futura, ou **(B) a busca urgente por uma alternativa geocódigo** com custos previsíveis e termos de uso claros, garantindo a longevidade e a capacidade de contratação do ODIN.
-
-**Palavras-chave:** Projeto ODIN, Geocoding, Google API, Risco de Compliance, Sustentabilidade, Políticas Públicas.
+Keywords: ODIN Project, Geocoding, Google API, Compliance Risk, Sustainability, Public Policy.
