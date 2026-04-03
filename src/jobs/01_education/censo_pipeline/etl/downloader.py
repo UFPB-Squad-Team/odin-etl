@@ -1,8 +1,8 @@
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-from utils.logger import get_logger
-from utils.file_utils import file_exists
+from ..utils.logger import get_logger
+from ..utils.file_utils import file_exists
 import os
 
 logger = get_logger("downloader")

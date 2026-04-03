@@ -1,6 +1,10 @@
 import pandas as pd
-from config.columns import *
-from utils.logger import get_logger
+from ..config.columns import (
+    COLUNAS_IDENTIFICACAO, COLUNAS_INFRA, COLUNAS_ACESSIBILIDADE,
+    COLUNAS_TECNOLOGIA, COLUNAS_PROFISSIONAIS, COLUNAS_MATRICULAS,
+    COLUNAS_DOCENTES, COLUNAS_SALAS, COLUNAS_TRANSPORTE,
+)
+from ..utils.logger import get_logger
 
 logger = get_logger("Subdatasets")
 

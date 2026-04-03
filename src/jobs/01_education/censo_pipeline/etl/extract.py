@@ -1,6 +1,6 @@
 import os
 import zipfile
-from utils.logger import get_logger
+from ..utils.logger import get_logger
 
 logger = get_logger("Extractor")
 

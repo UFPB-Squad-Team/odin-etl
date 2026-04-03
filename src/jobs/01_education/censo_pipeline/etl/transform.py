@@ -1,6 +1,6 @@
 import pandas as pd
-from config.settings import TARGET_REGION
-from utils.logger import get_logger
+from ..config.settings import TARGET_REGION
+from ..utils.logger import get_logger
 
 logger = get_logger("Transformer")
 
