@@ -1,41 +1,57 @@
-s3:
-  bucket_name: "alpargatas-insights-datalake"
-  raw_folder: "ODIN/raw"
-  intermediate_folder: "ODIN/intermediate"
-  processed_folder: "ODIN/processed"
+# ODIN-ETL - Configuracao do Geocode Pipeline
 
+# Caminhos locais das camadas Medallion (Bronze -> Silver -> Gold)
+paths:
+  bronze: "data/bronze"
+  silver: "data/silver"
+  gold: "data/gold"
+  checkpoints: "data/checkpoints"
+
+# Fonte de dados: Censo Escolar INEP
 ingestion_sources:
   censo_escolar:
-    url: "https://download.inep.gov.br/dados_abertos/microdados_censo_escolar_2023.zip"
-    output_filename: "censo_2023.zip"
-    target_filename_in_zip: "microdados_ed_basica_2023.csv"
-
-paths:
-  raw_municipios_brasileiros: "ODIN/intermediate/escolas_nordeste.parquet"
-  intermediate_escolas_nordeste: "ODIN/processed/escolas_nordeste_geocoded.parquet"
+    url: "https://download.inep.gov.br/dados_abertos/microdados_censo_escolar_2024.zip"
+    output_filename: "censo_2024.zip"
+    target_filename_in_zip: "microdados_ed_basica_2024.csv"
+    silver_output: "censo_nordeste_2024.parquet"
 
 geocode_pipeline:
   extract:
-    # Parâmetros para filtrar o censo escolar
-    filtro_uf: ["MA", "PI", "CE", "RN", "PB", "PE", "AL", "SE", "BA"]
-    filtro_dependencia_adm: [1, 2, 3] # Federal, Estadual, Municipal
-    filtro_situacao_funcionamento: 1 # Em atividade
-    # Parâmetros para leitura do CSV
+    filtro_uf: ["PB"]
+    filtro_dependencia_adm: [1, 2, 3]
+    filtro_situacao_funcionamento: 1
     csv_delimiter: ";"
     csv_encoding: "latin-1"
+    silver_output: "escolas_pb.parquet"
 
   transform:
-      # Colunas de endereço para criar o df_endereco
-      colunas_endereco: 
-        - 'CO_ENTIDADE'   # ID da escola
-        - 'SG_UF'
-        - 'DS_ENDERECO'
-        - "NU_ENDERECO"
-        - 'NO_BAIRRO'
-        - 'CO_CEP'
-        - 'NO_MUNICIPIO'
-      # Coluna final que será usada no Google API
-      coluna_endereco_final: 'endereco_completo'
-      
-      # Path para salvar o progresso (atualmente local para desenvolvimento/testes locais)
-      checkpoint_output_path: "data/escolas_nordeste_geocoded.parquet"
+    colunas_endereco:
+      - "CO_ENTIDADE"
+      - "SG_UF"
+      - "DS_ENDERECO"
+      - "NU_ENDERECO"
+      - "NO_BAIRRO"
+      - "CO_CEP"
+      - "NO_MUNICIPIO"
+    coluna_endereco_final: "endereco_completo"
+    gold_output: "escolas_pb_geocoded.parquet"
+    checkpoint_output: "geocode_progress.parquet"
+    batch_size: 100
+
+geo_pipeline:
+  ibge:
+    setores_censitarios_url: "https://geoftp.ibge.gov.br/organizacao_do_territorio/malhas_territoriais/malhas_de_setores_censitarios__divisoes_intramunicipais/censo_2022/setores_censitarios_shp/pb/pb_setores_censitarios.zip"
+    municipios_url: "https://geoftp.ibge.gov.br/organizacao_do_territorio/malhas_territoriais/malhas_municipais/municipio_2022/UFs/PB/PB_Municipios_2022.zip"
+    setores_silver_output: "setores_censitarios_pb.parquet"
+    municipios_silver_output: "municipios_pb.parquet"
+
+  colunas_metricas:
+    matriculas: ["QT_MAT_FUND", "QT_MAT_MED", "QT_MAT_INF"]
+    internet: "IN_INTERNET"
+    biblioteca: "IN_BIBLIOTECA"
+    lab_informatica: "IN_LABORATORIO_INFORMATICA"
+    sem_acessibilidade: "IN_ACESSIBILIDADE_INEXISTENTE"
+
+  mongodb:
+    colecao_bairros: "bairro_indicadores"
+    colecao_municipios: "municipio_indicadores"

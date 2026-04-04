@@ -1,74 +1,63 @@
-import logging
+"""
+Geocode Pipeline — Extract Step
 
-import pandas as pd
+Reads the Silver parquet produced by censo_pipeline, filters schools
+from Paraiba (SG_UF == 'PB'), and saves the result to Silver for the
+transform step.
+"""
+import logging
+from pathlib import Path
+
 from dotenv import load_dotenv
 
-from src.common.utils import (
-    get_s3_storage_options,
-    load_config,
-    read_zipped_file_from_s3,
-)
+from src.common.storage import StorageBackend, get_storage_backend
+from src.common.utils import load_config
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - [%(levelname)s] - %(message)s",
 )
 
-def _filter_data(df: pd.DataFrame, filter_config: dict) -> pd.DataFrame:
-    """Aplica filtros de UF, dependência e situação no DataFrame."""
-    logging.info("Aplicando filtros para selecionar o escopo dos dados...")
+
+def _filter_data(df, filter_config: dict):
+    """Apply UF, administrative dependency, and operational status filters."""
+    logging.info("Applying filters...")
     df_filtered = df[
-        (df["SG_UF"].isin(filter_config["filtro_uf"])) 
-        & (df["TP_DEPENDENCIA"].isin(filter_config["filtro_dependencia_adm"]))
-        & (
-            df["TP_SITUACAO_FUNCIONAMENTO"]
-            == filter_config["filtro_situacao_funcionamento"]
-        )
+        (df["SG_UF"].isin(filter_config["filtro_uf"]))
+        & (df["TP_DEPENDENCIA"].astype(int).isin(filter_config["filtro_dependencia_adm"]))
+        & (df["TP_SITUACAO_FUNCIONAMENTO"].astype(int) == filter_config["filtro_situacao_funcionamento"])
     ].copy()
-    logging.info(f"Filtros aplicados. {len(df_filtered)} registros selecionados.")
+    logging.info(f"Filter applied: {len(df_filtered)} records selected.")
     return df_filtered
 
-def run():
-    """
-    Orquestra a extração do Censo Escolar do S3, aplica filtros e
-    salva o resultado na camada 'intermediate' do S3.
-    """
-    logging.info("--- INICIANDO JOB DE EXTRAÇÃO (PIPELINE DE ESCOLAS) DO S3 ---")
 
+def run(storage: StorageBackend = None):
+    """
+    Extract schools from the censo Silver parquet, filter to PB only,
+    and save the result to Silver for the transform step.
+    """
+    logging.info("--- STARTING GEOCODE EXTRACT ---")
     load_dotenv()
+
+    storage = storage or get_storage_backend()
     config = load_config()
-    s3_config = config["s3"]
+    paths = config["paths"]
     source_config = config["ingestion_sources"]["censo_escolar"]
-    geocode_config = config["geocode_pipeline"]["extract"]
+    extract_config = config["geocode_pipeline"]["extract"]
 
-    try:
-        df_raw = read_zipped_file_from_s3(
-            bucket_name=s3_config["bucket_name"],
-            s3_zip_key=f"{s3_config['raw_folder']}/{source_config['output_filename']}",
-            target_filename=source_config["target_filename_in_zip"],
-            read_params={
-                "delimiter": geocode_config["csv_delimiter"],
-                "encoding": geocode_config["csv_encoding"],
-                "on_bad_lines": "skip",
-                "low_memory": False,
-            },
-        )
+    input_path = str(Path(paths["silver"]) / source_config["silver_output"])
+    output_path = str(Path(paths["silver"]) / extract_config["silver_output"])
 
-        df_filtered = _filter_data(df_raw, filter_config=geocode_config)
+    logging.info(f"Reading censo Silver from: {input_path}")
+    df_raw = storage.read_parquet(input_path)
+    logging.info(f"Total records in censo Silver: {len(df_raw)}")
 
-        output_s3_path = f"s3://{s3_config['bucket_name']}/{s3_config['intermediate_folder']}/escolas_nordeste.parquet"
-        storage_options = get_s3_storage_options()
+    df_filtered = _filter_data(df_raw, extract_config)
 
-        logging.info(f"Salvando arquivo intermediário no S3 em: {output_s3_path}")
-        df_filtered.to_parquet(
-            output_s3_path, index=False, storage_options=storage_options
-        )
+    logging.info(f"Saving PB schools to: {output_path}")
+    storage.save_parquet(df_filtered, output_path)
 
-        logging.info("--- JOB DE EXTRAÇÃO (S3) FINALIZADO COM SUCESSO ---")
-
-    except Exception as e:
-        logging.error(f"Falha na execução do job de extração do S3: {e}", exc_info=True)
-        raise
+    logging.info("--- GEOCODE EXTRACT COMPLETED ---")
 
 
 if __name__ == "__main__":

@@ -1,172 +1,138 @@
-import os
+"""
+Geocode Pipeline — Transform Step
+
+Reads the Silver parquet from extract, geocodes each unique address
+using a pluggable geocode_fn, saves incremental checkpoints, and
+writes the final Gold parquet.
+
+The geocode_fn is injected by the caller (main.py), keeping this
+module decoupled from any specific geocoding provider.
+"""
 import logging
+from pathlib import Path
+from typing import Callable
+
 import pandas as pd
-from functools import partial
 from dotenv import load_dotenv
-from pandarallel import pandarallel
 
-from src.common.utils import load_config, get_s3_storage_options
+from src.common.storage import StorageBackend, get_storage_backend
+from src.common.utils import load_config
 
-# Inicialização
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - [%(levelname)s] - %(message)s")
-pandarallel.initialize(progress_bar=True, use_memory_fs=False)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - [%(levelname)s] - %(message)s",
+)
 
-def _get_api_key() -> str:
-    """Carrega e valida a chave da API do Google das variáveis de ambiente."""
-    load_dotenv()
-    api_key = os.getenv('GOOGLE_API_KEY')
-    if not api_key:
-        raise ValueError("Chave GOOGLE_API_KEY não encontrada! Verifique seu arquivo .env.")
-    return api_key
+# Type alias for the pluggable geocoding function
+GeocodeFunction = Callable[[str], tuple[float, float] | None]
 
-def geocode_google_process(endereco: str, api_key: str) -> pd.Series:
+
+def _build_address_column(df: pd.DataFrame, columns: list, final_col: str) -> pd.DataFrame:
+    """Concatenate address fields into a single string column and deduplicate."""
+    df_addr = df[columns].copy()
+    df_addr[final_col] = (
+        df_addr["DS_ENDERECO"].astype(str)
+        + ", " + df_addr["NU_ENDERECO"].astype(str)
+        + ", " + df_addr["NO_BAIRRO"].astype(str)
+        + ", " + df_addr["NO_MUNICIPIO"].astype(str)
+        + ", " + df_addr["SG_UF"].astype(str)
+        + ", " + df_addr["CO_CEP"].astype(str)
+    )
+    df_addr = df_addr.drop_duplicates(subset=[final_col]).reset_index(drop=True)
+    logging.info(f"Unique addresses to geocode: {len(df_addr)}")
+    return df_addr
+
+
+def _load_checkpoint(checkpoint_path: str, address_col: str) -> tuple[pd.DataFrame, set]:
+    """Return already-processed DataFrame and set of completed addresses."""
+    if Path(checkpoint_path).exists():
+        df_done = pd.read_parquet(checkpoint_path)
+        done_addresses = set(df_done[address_col].dropna().unique())
+        logging.info(f"Checkpoint found: {len(done_addresses)} addresses already geocoded.")
+        return df_done, done_addresses
+    logging.info("No checkpoint found. Starting from scratch.")
+    return pd.DataFrame(), set()
+
+
+def run(geocode_fn: GeocodeFunction, storage: StorageBackend = None):
     """
-    Função autossuficiente para geocodificação.
-    Executada em paralelo pelo Pandarallel.
-    """
-    try:
-        # Importações locais para garantir que cada processo tenha seus objetos
-        from geopy.geocoders import GoogleV3
-        import time
-        
-        geolocator = GoogleV3(api_key=api_key)
-        time.sleep(0.05) 
-        location = geolocator.geocode(endereco, timeout=10)
-        
-        if location:
-            # Retorna uma Series para ser desempacotada pelo apply
-            return pd.Series([location.latitude, location.longitude])
-        return pd.Series([None, None])
-    except Exception as e:
-        logging.debug(f"Erro ao geocodificar '{endereco}': {e}")
-        return pd.Series([None, None])
+    Geocode all unique school addresses from the Silver parquet.
 
-def create_address_dataframe(df: pd.DataFrame, columns: list, final_col_name: str) -> pd.DataFrame:
-    """
-    Filtra colunas, cria a coluna de endereço completo e remove duplicatas.
-    """
-    logging.info("Preparando DataFrame de endereços...")
-    
-    # 1. Seleção de Colunas
-    df_endereco = df[columns].copy()
-
-    # 2. Criação da Coluna de Endereço Completo
-    address_parts = [
-        df_endereco["DS_ENDERECO"].astype(str) + ", " + df_endereco["NU_ENDERECO"].astype(str),
-        df_endereco["NO_BAIRRO"],
-        df_endereco["NO_MUNICIPIO"],
-        df_endereco["SG_UF"],
-        df_endereco["CO_CEP"]
-    ]
-    df_endereco[final_col_name] = address_parts[0]
-    for part in address_parts[1:]:
-        df_endereco[final_col_name] = df_endereco[final_col_name] + ", " + part.astype(str)
-        
-    # 3. Remoção de Duplicatas e Reset de Índice
-    df_endereco = df_endereco.drop_duplicates(subset=[final_col_name]).reset_index(drop=True)
-    
-    logging.info(f"DataFrame de endereços únicos pronto. Total de {len(df_endereco)} endereços.")
-    return df_endereco
-
-def manage_progress(df_input: pd.DataFrame, checkpoint_path: str, address_col_name: str) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    Gerencia a lógica de leitura para retomar o progresso de um arquivo local.
-    
     Args:
-        df_input: O DataFrame com todos os endereços únicos a serem processados.
-        local_path: O caminho local do arquivo de progresso (checkpoint).
-        address_col_name: O nome da coluna que contém o endereço completo (chave de deduplicação).
+        geocode_fn: Callable that receives an address string and returns
+                    (latitude, longitude) or None if not found.
+        storage:    StorageBackend instance (defaults to get_storage_backend()).
     """
-    if os.path.exists(checkpoint_path):
-        logging.info(f"\nArquivo de progresso encontrado em: '{checkpoint_path}'. Retomando...")
-        df_ja_processado = pd.read_parquet(checkpoint_path)
-        
-        enderecos_completos = df_ja_processado[address_col_name].dropna().unique()
-        logging.info(f"{len(enderecos_completos)} endereços já foram geocodificados com sucesso.")
-        
-        # Filtra o DataFrame inicial pelo que AINDA NÃO foi processado
-        df_para_processar = df_input[~df_input[address_col_name].isin(enderecos_completos)].copy()
-    else:
-        logging.info("\nNenhum arquivo de progresso encontrado. Começando do zero.")
-        df_ja_processado = pd.DataFrame()
-        df_para_processar = df_input.copy()
+    logging.info("--- STARTING GEOCODE TRANSFORM ---")
+    load_dotenv()
 
-    logging.info(f"Total de endereços a processar nesta execução: {len(df_para_processar)}")
-    return df_ja_processado, df_para_processar
-
-def run():
-    """
-    Orquestra o processo de Transformação e Geocodificação.
-    """
-    logging.info("--- INICIANDO JOB DE GEOCODIFICAÇÃO (TRANSFORM) ---")
-
-    # Carregamento e Configuração
+    storage = storage or get_storage_backend()
     config = load_config()
-    s3_config = config["s3"]
-    geocode_config = config["escolas_pipeline"]["transform"]
-    paths_config = config["paths"]
-    
-    try:
-        google_api_key = _get_api_key()
-        
-        # 1. Leitura do Arquivo Intermediário (Output do Extract)
-        input_s3_path = f"s3://{s3_config['bucket_name']}/{paths_config['intermediate_escolas_nordeste']}"
-        logging.info(f"Lendo dados de entrada do S3: {input_s3_path}")
-        df_full = pd.read_parquet(
-            input_s3_path, 
-            storage_options=get_s3_storage_options()
-        )
-        
-        # 2. Preparação do DataFrame de Endereços
-        df_endereco_inicial = create_address_dataframe(
-            df_full, 
-            columns=geocode_config["colunas_endereco"],
-            final_col_name=geocode_config["coluna_endereco_final"]
-        )
+    paths = config["paths"]
+    transform_config = config["geocode_pipeline"]["transform"]
+    extract_config = config["geocode_pipeline"]["extract"]
 
-        # 3. Gerenciamento do Progresso (Leitura de checkpoint)
-        df_ja_processado, df_para_processar = manage_progress(
-            df_endereco_inicial, 
-            checkpoint_path=geocode_config["checkpoint_output_path"]
-        )
+    input_path = str(Path(paths["silver"]) / extract_config["silver_output"])
+    gold_path = str(Path(paths["gold"]) / transform_config["gold_output"])
+    checkpoint_path = str(Path(paths["checkpoints"]) / transform_config["checkpoint_output"])
+    address_col = transform_config["coluna_endereco_final"]
+    batch_size = transform_config.get("batch_size", 100)
 
-        # 4. Execução da Geocodificação
-        if not df_para_processar.empty:
-            logging.info(f"\nIniciando geocodificação paralela para {len(df_para_processar)} endereços...")
-            
-            # Cria a função com a chave da API "congelada" para o parallel_apply
-            geocode_with_key = partial(geocode_google_process, api_key=google_api_key)
-            
-            # Aplica a função em paralelo e desempacota os resultados
-            resultados = df_para_processar[geocode_config["coluna_endereco_final"]].parallel_apply(geocode_with_key)
-            
-            df_para_processar[['latitude', 'longitude']] = resultados
-            
-            logging.info("Geocodificação desta leva concluída.")
-            
-            # 5. Concatena e Salva o Checkpoint
-            df_final = pd.concat([df_ja_processado, df_para_processar], ignore_index=True)
-            logging.info(f"Salvando checkpoint em: {geocode_config['checkpoint_output_path']}")
-            df_final.to_parquet(geocode_config["checkpoint_output_path"], index=False)
+    logging.info(f"Reading Silver from: {input_path}")
+    df_full = storage.read_parquet(input_path)
 
-        else:
-            df_final = df_ja_processado
-            logging.info("Nenhum endereço novo para processar. O trabalho já está concluído!")
-        
-        # 6. Salvamento Final no S3 (Camada Processed)
-        output_s3_path = f"s3://{s3_config['bucket_name']}/{s3_config['processed_folder']}/escolas_nordeste_geocoded.parquet"
-        logging.info(f"\nSalvando resultado final no S3 (Processed): {output_s3_path}")
-        df_final.to_parquet(
-            output_s3_path, 
-            index=False, 
-            storage_options=get_s3_storage_options()
-        )
-        
-        logging.info("--- JOB DE GEOCODIFICAÇÃO (TRANSFORM) FINALIZADO COM SUCESSO ---")
+    df_addresses = _build_address_column(
+        df_full,
+        columns=transform_config["colunas_endereco"],
+        final_col=address_col,
+    )
 
-    except Exception as e:
-        logging.error(f"Falha na execução do job de geocodificação: {e}", exc_info=True)
-        raise
+    df_done, done_addresses = _load_checkpoint(checkpoint_path, address_col)
+    df_pending = df_addresses[~df_addresses[address_col].isin(done_addresses)].copy()
+    logging.info(f"Addresses pending geocoding: {len(df_pending)}")
+
+    if not df_pending.empty:
+        results = []
+        for i, (_, row) in enumerate(df_pending.iterrows(), start=1):
+            address = row[address_col]
+            try:
+                result = geocode_fn(address)
+                lat, lon = result if result else (None, None)
+            except Exception as e:
+                logging.debug(f"Geocoding failed for '{address}': {e}")
+                lat, lon = None, None
+
+            results.append({"latitude": lat, "longitude": lon})
+
+            # Save checkpoint every batch_size records
+            if i % batch_size == 0:
+                df_batch = df_pending.iloc[:i].copy()
+                df_batch[["latitude", "longitude"]] = pd.DataFrame(results)
+                df_checkpoint = pd.concat([df_done, df_batch], ignore_index=True)
+                Path(checkpoint_path).parent.mkdir(parents=True, exist_ok=True)
+                df_checkpoint.to_parquet(checkpoint_path, index=False)
+                logging.info(f"Checkpoint saved: {i}/{len(df_pending)} processed.")
+
+        df_pending[["latitude", "longitude"]] = pd.DataFrame(results)
+        df_final = pd.concat([df_done, df_pending], ignore_index=True)
+
+        # Final checkpoint save
+        Path(checkpoint_path).parent.mkdir(parents=True, exist_ok=True)
+        df_final.to_parquet(checkpoint_path, index=False)
+    else:
+        df_final = df_done
+        logging.info("All addresses already geocoded. Nothing to process.")
+
+    logging.info(f"Saving Gold to: {gold_path}")
+    storage.save_parquet(df_final, gold_path)
+    logging.info("--- GEOCODE TRANSFORM COMPLETED ---")
+
 
 if __name__ == "__main__":
-    run()
+    # When run directly, a placeholder geocode_fn is used.
+    # In production, main.py injects the real implementation.
+    def _placeholder(address: str):
+        logging.warning(f"Placeholder geocoder called for: {address}")
+        return None
+
+    run(geocode_fn=_placeholder)
