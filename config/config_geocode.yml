@@ -55,3 +55,34 @@ geo_pipeline:
   mongodb:
     colecao_bairros: "bairro_indicadores"
     colecao_municipios: "municipio_indicadores"
+
+inep_resultados_pipeline:
+  sources:
+    inse:
+      url: "https://download.inep.gov.br/informacoes_estatisticas/indicadores_educacionais/2023/inse_2023.zip"
+      output_filename: "inse_2023.zip"
+      target_filename: "inse_2023.xlsx"
+      silver_output: "inse_2023.parquet"
+    ideb_anos_iniciais:
+      url: "https://download.inep.gov.br/educacao_basica/portal_ideb/planilhas_para_download/2023/divulgacao_anos_iniciais_escolas_2023.xlsx"
+      output_filename: "ideb_anos_iniciais_2023.xlsx"
+      silver_output: "ideb_anos_iniciais_2023.parquet"
+    ideb_anos_finais:
+      url: "https://download.inep.gov.br/educacao_basica/portal_ideb/planilhas_para_download/2023/divulgacao_anos_finais_escolas_2023.xlsx"
+      output_filename: "ideb_anos_finais_2023.xlsx"
+      silver_output: "ideb_anos_finais_2023.parquet"
+
+  # Colunas relevantes de cada fonte (chave de join: CO_ENTIDADE)
+  colunas:
+    inse:
+      - "CO_ESCOLA"       # chave de join (equivale a CO_ENTIDADE)
+      - "INSE_VALOR_ABSOLUTO"
+      - "INSE_CLASSIFICACAO"
+    ideb:
+      - "CO_ESCOLA"
+      - "VL_OBSERVADO_2023"   # IDEB observado
+      - "VL_META_2023"        # Meta IDEB
+
+  gold_output: "escolas_pb_com_indicadores.parquet"
+  mongodb:
+    colecao: "escolas"        # mesmo upsert da geocode pipeline — enriquece o documento

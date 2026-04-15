@@ -12,6 +12,10 @@ ehthumbs.db
 .idea/
 *.iml
 
+.vscode/
+
+.kiro/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -109,7 +113,7 @@ spark-warehouse/
 
 # Variáveis de ambiente e segredos
 .env
-.env.*
+.env.
 *.env
 .secrets/
 secrets/

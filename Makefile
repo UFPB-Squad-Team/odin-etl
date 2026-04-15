@@ -1,6 +1,7 @@
 .PHONY: help build run down logs rebuild clean restart shell \
 	run-censo \
 	run-geocode-extract run-geocode-transform run-geocode-load run-geocode \
+	run-geo-ingest run-bairro run-municipio run-geo-phase2 \
 	run-education
 
 build: ## Build Docker images
@@ -42,8 +43,22 @@ run-geocode-load: ## Run only the geocode load step (insert into MongoDB)
 run-geocode: ## Run the full geocode pipeline (extract -> transform -> load)
 	docker-compose run --rm etl python -m src.jobs.01_education.geocode_pipeline.main
 
-run-education: ## Run the full education job (censo + geocode end-to-end)
+run-education: ## Run the full education job (all pipelines end-to-end)
 	docker-compose run --rm etl python -m src.jobs.01_education.main
+
+run-geo-ingest: ## Run Pipeline 3 — download IBGE shapefiles (sectors + municipalities)
+	docker-compose run --rm etl python -m src.jobs.01_education.geo_ingest_pipeline.main
+
+run-bairro: ## Run Pipeline 6 — spatial join + aggregate indicators by neighborhood
+	docker-compose run --rm etl python -m src.jobs.01_education.bairro_pipeline.main
+
+run-municipio: ## Run Pipeline 7 — spatial join + aggregate indicators by municipality
+	docker-compose run --rm etl python -m src.jobs.01_education.municipio_pipeline.main
+
+run-geo-phase2: ## Run all Phase 2 pipelines (geo-ingest + bairro + municipio)
+	docker-compose run --rm etl python -m src.jobs.01_education.geo_ingest_pipeline.main
+	docker-compose run --rm etl python -m src.jobs.01_education.bairro_pipeline.main
+	docker-compose run --rm etl python -m src.jobs.01_education.municipio_pipeline.main
 
 help: ## Show this help message
 	@echo "Available commands:"
