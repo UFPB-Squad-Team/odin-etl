@@ -1,21 +1,3 @@
-"""
-Education Job — Unified Orchestrator
-
-Runs the full education data pipeline end-to-end:
-
-  Fase 1:
-    1. censo_pipeline    — download, filter, save Silver parquet
-    2. geocode_pipeline  — filter PB, geocode addresses, load into MongoDB
-
-  Fase 2:
-    3. geo_ingest_pipeline  — download IBGE shapefiles (Pipeline 3)
-    4. bairro_pipeline      — spatial join + aggregate by neighborhood (Pipeline 6)
-    5. municipio_pipeline   — spatial join + aggregate by municipality (Pipeline 7)
-
-Run via:
-    make run-education
-    docker-compose run --rm etl python -m src.jobs.01_education.main
-"""
 import logging
 from datetime import datetime
 
@@ -28,6 +10,7 @@ from src.jobs.education_jobs.inep_resultados_pipeline.main import run as run_ine
 from src.jobs.education_jobs.geo_ingest_pipeline.main import run as run_geo_ingest
 from src.jobs.education_jobs.bairro_pipeline.main import run as run_bairro
 from src.jobs.education_jobs.municipio_pipeline.main import run as run_municipio
+from src.jobs.education_jobs.setor_pipeline.main import run as run_setor
 
 logging.basicConfig(
     level=logging.INFO,
@@ -42,10 +25,11 @@ def run():
         ("censo_pipeline", run_censo),
         ("indicadores_pipeline", run_indicadores),
         ("geocode_pipeline", run_geocode),
-        # ("inep_resultados_pipeline", run_inep),  # Temporarily disabled: INEP URLs require verification
-        # ("geo_ingest_pipeline", run_geo_ingest),  # Temporarily disabled: IBGE URLs require verification
-        # ("bairro_pipeline", run_bairro),  # Depends on geo_ingest_pipeline (spatial join)
-        # ("municipio_pipeline", run_municipio),  # Depends on geo_ingest_pipeline (spatial join)
+        ("geo_ingest_pipeline", run_geo_ingest),  # processa shapefile de bairros e setores IBGE
+        ("bairro_pipeline", run_bairro),           # agrega por bairro via spatial join
+        ("municipio_pipeline", run_municipio),     # agrega por município via CEP
+        ("setor_pipeline", run_setor),             # agrega por setor censitário (cobertura total PB)
+        # ("inep_resultados_pipeline", run_inep),  # URLs INEP pendentes de verificação
     ]
 
     for nome, pipeline_fn in pipelines:
@@ -59,7 +43,7 @@ def run():
         elapsed = (datetime.now() - t0).total_seconds()
         logging.info(f"[{nome.upper()}] Completed in {elapsed:.1f}s")
 
-    logging.info("=== EDUCATION JOB COMPLETED — Census + Geocode data in data/gold/ ===")
+    logging.info("=== EDUCATION JOB COMPLETED — dados disponíveis no MongoDB (escolas, bairro_indicadores, municipio_indicadores) ===")
 
 
 if __name__ == "__main__":

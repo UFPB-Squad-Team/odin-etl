@@ -1,76 +1,84 @@
-"""
-Municipio Pipeline — Transform (Pipeline 7)
-
-Performs a spatial join between geocoded schools (points) and
-municipality polygons, then aggregates educational metrics per municipality.
-"""
 import logging
 from pathlib import Path
 
-import geopandas as gpd
 import pandas as pd
 
-from src.common.geo_utils import calcular_indicadores, poligono_para_geojson
+from src.common.cep_lookup import enriquecer_com_cep
+from src.common.geo_utils import calcular_indicadores
 from src.common.storage import StorageBackend, get_storage_backend
 from src.common.utils import load_config
 
+logger = logging.getLogger(__name__)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - [%(levelname)s] - %(message)s",
 )
 
 
-def run(
-    gdf_escolas: gpd.GeoDataFrame,
-    storage: StorageBackend = None,
-) -> pd.DataFrame:
+def run(storage: StorageBackend = None) -> pd.DataFrame:
     """
-    Spatial join schools to municipalities and aggregate metrics per municipality.
-
-    Args:
-        gdf_escolas: GeoDataFrame of geocoded schools (CRS EPSG:4326).
-        storage:     StorageBackend instance.
+    Agrega indicadores educacionais por município.
 
     Returns:
-        DataFrame with one row per municipality and aggregated indicators.
+        DataFrame com uma linha por município e colunas:
+            municipio, municipioIdIbge, sg_uf, centroide,
+            total_bairros, total_escolas, total_matriculas,
+            pct_com_internet, pct_com_biblioteca,
+            pct_com_lab_informatica, pct_sem_acessibilidade
     """
     storage = storage or get_storage_backend()
     config = load_config()
     paths = config["paths"]
-    ibge = config["geo_pipeline"]["ibge"]
     metricas = config["geo_pipeline"]["colunas_metricas"]
+    geocode_cfg = config["geocode_pipeline"]["transform"]
+    cep_path = config.get("cep_pipeline", {}).get("cep_path", "data/gold/cep.json")
 
-    municipios_path = str(Path(paths["silver"]) / ibge["municipios_silver_output"])
-    logging.info(f"Reading municipalities from: {municipios_path}")
-    gdf_municipios = gpd.read_file(municipios_path)
+    # 1. Carregar escolas — usar Silver do geocode extract (tem CO_CEP)
+    escolas_path = str(Path(paths["gold"]) / geocode_cfg["gold_output"])
+    df_escolas = storage.read_parquet(escolas_path)
 
-    if gdf_escolas.crs.to_epsg() != 4326:
-        gdf_escolas = gdf_escolas.to_crs("EPSG:4326")
-    if gdf_municipios.crs.to_epsg() != 4326:
-        gdf_municipios = gdf_municipios.to_crs("EPSG:4326")
+    if "documento" in df_escolas.columns and "CO_CEP" not in df_escolas.columns:
+        df_censo_path = str(Path(paths["silver"]) / config["geocode_pipeline"]["extract"]["silver_output"])
+        df_escolas = storage.read_parquet(df_censo_path)
+        logger.info(f"Usando Silver do geocode extract: {len(df_escolas)} escolas")
 
-    logging.info(f"Running spatial join: {len(gdf_escolas)} schools x {len(gdf_municipios)} municipalities...")
-    gdf_joined = gpd.sjoin(gdf_escolas, gdf_municipios, how="inner", predicate="within")
+    # 2. Enriquecer com município padronizado via CEP
+    df = enriquecer_com_cep(df_escolas, cep_path=cep_path)
 
-    sem_poligono = len(gdf_escolas) - len(gdf_joined)
-    if sem_poligono > 0:
-        logging.warning(f"{sem_poligono} school(s) did not fall within any municipality polygon.")
+    sem_municipio = df["municipio_cep"].isna().sum()
+    if sem_municipio > 0:
+        logger.warning(f"{sem_municipio} escola(s) sem município identificado via CEP.")
+    df = df.dropna(subset=["municipio_cep"]).copy()
 
-    logging.info("Aggregating indicators by municipality...")
+    # 3. Calcular métricas por município
+    logger.info("Calculando indicadores por município...")
     df_indicadores = calcular_indicadores(
-        df=gdf_joined,
-        group_col="CD_MUN",
+        df=df,
+        group_col="municipio_cep",
         config=metricas,
     )
 
-    municipio_geo = gdf_municipios.set_index("CD_MUN")[["geometry", "NM_MUN"]]
-    df_indicadores = df_indicadores.merge(municipio_geo, left_on="CD_MUN", right_index=True, how="left")
-    df_indicadores = df_indicadores.rename(columns={
-        "CD_MUN": "co_municipio",
-        "NM_MUN": "nome_municipio",
-    })
-    df_indicadores["geometria"] = df_indicadores["geometry"].apply(poligono_para_geojson)
-    df_indicadores = df_indicadores.drop(columns=["geometry"])
+    # 4. Recuperar metadados e centróide por município
+    municipio_meta = df.groupby("municipio_cep").agg(
+        municipioIdIbge=("id_mundv_cep", "first"),
+        sg_uf=("sg_uf", "first") if "sg_uf" in df.columns else ("SG_UF", "first"),
+        total_bairros=("bairro_cep", pd.Series.nunique),
+        lat_media=("lat_cep", "mean"),
+        lon_media=("lon_cep", "mean"),
+    ).reset_index()
 
-    logging.info(f"Aggregation complete: {len(df_indicadores)} municipalities with schools.")
-    return df_indicadores
+    df_final = df_indicadores.merge(municipio_meta, on="municipio_cep", how="left")
+    df_final = df_final.rename(columns={"municipio_cep": "municipio"})
+
+    # 5. Montar centróide GeoJSON
+    df_final["centroide"] = df_final.apply(
+        lambda row: {
+            "type": "Point",
+            "coordinates": [round(float(row["lon_media"]), 7), round(float(row["lat_media"]), 7)]
+        } if pd.notna(row.get("lat_media")) and pd.notna(row.get("lon_media")) else None,
+        axis=1,
+    )
+    df_final = df_final.drop(columns=["lat_media", "lon_media"], errors="ignore")
+
+    logger.info(f"Agregação por município concluída: {len(df_final)} municípios com escolas.")
+    return df_final

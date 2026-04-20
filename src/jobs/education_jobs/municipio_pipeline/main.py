@@ -1,17 +1,8 @@
-"""
-Municipio Pipeline — Orchestrator (Pipeline 7)
-
-Aggregates educational indicators per municipality and loads them
-into MongoDB for geospatial queries.
-
-Run via:
-    make run-municipio
-"""
 import logging
 from datetime import datetime
 
 from src.common.storage import get_storage_backend
-from src.jobs.education_jobs.municipio_pipeline.etl import extract, transform, load
+from src.jobs.education_jobs.municipio_pipeline.etl import transform, load
 
 logging.basicConfig(
     level=logging.INFO,
@@ -22,19 +13,16 @@ logging.basicConfig(
 def run(storage=None) -> None:
     storage = storage or get_storage_backend()
     logging.info("=== MUNICIPIO PIPELINE STARTED ===")
-
     t0 = datetime.now()
-    try:
-        gdf_escolas = extract.run(storage=storage)
-        logging.info("[EXTRACT] Completed.")
 
-        df_indicadores = transform.run(gdf_escolas=gdf_escolas, storage=storage)
-        logging.info("[TRANSFORM] Completed.")
+    try:
+        df_indicadores = transform.run(storage=storage)
+        logging.info(f"[TRANSFORM] {len(df_indicadores)} municípios agregados.")
 
         load.run(df_indicadores=df_indicadores)
-        logging.info("[LOAD] Completed.")
+        logging.info("[LOAD] Dados inseridos no MongoDB.")
     except Exception as e:
-        logging.error(f"Municipio pipeline failed: {e}")
+        logging.error(f"Municipio pipeline falhou: {e}")
         raise
 
     elapsed = (datetime.now() - t0).total_seconds()
@@ -43,4 +31,3 @@ def run(storage=None) -> None:
 
 if __name__ == "__main__":
     run()
-

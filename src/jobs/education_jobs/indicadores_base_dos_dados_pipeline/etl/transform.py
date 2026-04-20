@@ -1,11 +1,3 @@
-"""
-Indicadores Base dos Dados Pipeline — Transform
-
-Transforms raw INEP indicators into nested JSON structure:
-- educacao_infantil, fundamental_anos_iniciais, fundamental_anos_finais, ensino_medio
-- Each level contains: alunos_por_turma, horas_aula_diarias, docentes_superior, tdi, etc.
-- Geo point with longitude/latitude coordinates.
-"""
 import logging
 from pathlib import Path
 
@@ -23,17 +15,36 @@ logging.basicConfig(
     format="%(asctime)s - [%(levelname)s] - %(message)s",
 )
 
+# Campos onde 0 é fisicamente impossível e portanto é sentinela de dado ausente.
+# Baseado em análise estatística do dataset da PB (2024):
+#   horas_aula_diarias: 97% zeros, range real [1.4, 22.2]
+#   alunos_por_turma (EM): 91% zeros, range real [0.9, 36.6]
+CAMPOS_ZERO_SENTINELA = {
+    "horas_aula_diarias",
+    "alunos_por_turma",
+}
 
-def _to_float(v):
-    """Convert value to float or None."""
-    return None if pd.isna(v) else float(v)
+
+def _to_float(v, campo: str = "") -> float | None:
+    """
+    Converte valor para float ou None.
+    Para campos onde 0 é sentinela, substitui 0.0 por None.
+    """
+    if pd.isna(v):
+        return None
+    val = float(v)
+    if val == 0.0 and campo in CAMPOS_ZERO_SENTINELA:
+        return None
+    return val
 
 
 def _mount_indicators_doc(row):
     """
     Transform a row from raw INEP data into nested indicators document.
-    Aggregates AFD and IED groups into single values per level.
     """
+    def f(col, campo=""):
+        return _to_float(row.get(col), campo)
+
     return {
         "ano": int(row["ano"]) if pd.notna(row.get("ano")) else None,
         "id_municipio": int(row["id_municipio"]) if pd.notna(row.get("id_municipio")) else None,
@@ -42,46 +53,46 @@ def _mount_indicators_doc(row):
         "rede": row.get("rede"),
         "icg_nivel_complexidade_gestao_escola": row.get("icg_nivel_complexidade_gestao_escola"),
         "educacao_infantil": {
-            "alunos_por_turma": _to_float(row.get("atu_ei")),
-            "horas_aula_diarias": _to_float(row.get("had_ei")),
-            "docentes_superior": _to_float(row.get("dsu_ei")),
-            "afd": _to_float(row.get("afd_ei")),
+            "alunos_por_turma": f("atu_ei", "alunos_por_turma"),
+            "horas_aula_diarias": f("had_ei", "horas_aula_diarias"),
+            "docentes_superior": f("dsu_ei"),
+            "afd": f("afd_ei"),
         },
         "fundamental_anos_iniciais": {
-            "alunos_por_turma": _to_float(row.get("atu_ef_anos_iniciais")),
-            "horas_aula_diarias": _to_float(row.get("had_ef_anos_iniciais")),
-            "docentes_superior": _to_float(row.get("dsu_ef_anos_iniciais")),
-            "tdi": _to_float(row.get("tdi_ef_anos_iniciais")),
-            "taxa_aprovacao": _to_float(row.get("taxa_aprovacao_ef_anos_iniciais")),
-            "taxa_reprovacao": _to_float(row.get("taxa_reprovacao_ef_anos_iniciais")),
-            "taxa_abandono": _to_float(row.get("taxa_abandono_ef_anos_iniciais")),
-            "tnr": _to_float(row.get("tnr_ef_anos_iniciais")),
-            "afd": _to_float(row.get("afd_ef_anos_iniciais")),
-            "ied": _to_float(row.get("ied_ef_anos_iniciais")),
+            "alunos_por_turma": f("atu_ef_anos_iniciais", "alunos_por_turma"),
+            "horas_aula_diarias": f("had_ef_anos_iniciais", "horas_aula_diarias"),
+            "docentes_superior": f("dsu_ef_anos_iniciais"),
+            "tdi": f("tdi_ef_anos_iniciais"),
+            "taxa_aprovacao": f("taxa_aprovacao_ef_anos_iniciais"),
+            "taxa_reprovacao": f("taxa_reprovacao_ef_anos_iniciais"),
+            "taxa_abandono": f("taxa_abandono_ef_anos_iniciais"),
+            "tnr": f("tnr_ef_anos_iniciais"),
+            "afd": f("afd_ef_anos_iniciais"),
+            "ied": f("ied_ef_anos_iniciais"),
         },
         "fundamental_anos_finais": {
-            "alunos_por_turma": _to_float(row.get("atu_ef_anos_finais")),
-            "horas_aula_diarias": _to_float(row.get("had_ef_anos_finais")),
-            "docentes_superior": _to_float(row.get("dsu_ef_anos_finais")),
-            "tdi": _to_float(row.get("tdi_ef_anos_finais")),
-            "taxa_aprovacao": _to_float(row.get("taxa_aprovacao_ef_anos_finais")),
-            "taxa_reprovacao": _to_float(row.get("taxa_reprovacao_ef_anos_finais")),
-            "taxa_abandono": _to_float(row.get("taxa_abandono_ef_anos_finais")),
-            "tnr": _to_float(row.get("tnr_ef_anos_finais")),
-            "afd": _to_float(row.get("afd_ef_anos_finais")),
-            "ied": _to_float(row.get("ied_ef_anos_finais")),
+            "alunos_por_turma": f("atu_ef_anos_finais", "alunos_por_turma"),
+            "horas_aula_diarias": f("had_ef_anos_finais", "horas_aula_diarias"),
+            "docentes_superior": f("dsu_ef_anos_finais"),
+            "tdi": f("tdi_ef_anos_finais"),
+            "taxa_aprovacao": f("taxa_aprovacao_ef_anos_finais"),
+            "taxa_reprovacao": f("taxa_reprovacao_ef_anos_finais"),
+            "taxa_abandono": f("taxa_abandono_ef_anos_finais"),
+            "tnr": f("tnr_ef_anos_finais"),
+            "afd": f("afd_ef_anos_finais"),
+            "ied": f("ied_ef_anos_finais"),
         },
         "ensino_medio": {
-            "alunos_por_turma": _to_float(row.get("atu_em")),
-            "horas_aula_diarias": _to_float(row.get("had_em")),
-            "docentes_superior": _to_float(row.get("dsu_em")),
-            "tdi": _to_float(row.get("tdi_em")),
-            "taxa_aprovacao": _to_float(row.get("taxa_aprovacao_em")),
-            "taxa_reprovacao": _to_float(row.get("taxa_reprovacao_em")),
-            "taxa_abandono": _to_float(row.get("taxa_abandono_em")),
-            "tnr": _to_float(row.get("tnr_em")),
-            "afd": _to_float(row.get("afd_em")),
-            "ied": _to_float(row.get("ied_em")),
+            "alunos_por_turma": f("atu_em", "alunos_por_turma"),
+            "horas_aula_diarias": f("had_em", "horas_aula_diarias"),
+            "docentes_superior": f("dsu_em"),
+            "tdi": f("tdi_em"),
+            "taxa_aprovacao": f("taxa_aprovacao_em"),
+            "taxa_reprovacao": f("taxa_reprovacao_em"),
+            "taxa_abandono": f("taxa_abandono_em"),
+            "tnr": f("tnr_em"),
+            "afd": f("afd_em"),
+            "ied": f("ied_em"),
         },
         "geo": {
             "type": "Point",

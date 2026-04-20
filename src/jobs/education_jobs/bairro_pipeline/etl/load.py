@@ -1,16 +1,13 @@
-"""
-Bairro Pipeline — Load (Pipeline 6)
-
-Upserts neighborhood indicators into MongoDB collection 'bairro_indicadores'.
-Creates a 2dsphere index on the 'geometria' field for geospatial queries.
-"""
 import logging
+import os
 
 import pandas as pd
+from dotenv import load_dotenv
+from pymongo import MongoClient, UpdateOne
 
 from src.common.utils import load_config
-from src.jobs.education_jobs.geo_aggregate_shared import upsert_dataframe
 
+logger = logging.getLogger(__name__)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - [%(levelname)s] - %(message)s",
@@ -19,28 +16,62 @@ logging.basicConfig(
 
 def run(df_indicadores: pd.DataFrame) -> None:
     """
-    Upsert bairro indicators into MongoDB.
+    Upsert de indicadores por bairro no MongoDB.
+
+    Chave de upsert composta: { bairro, municipio }
+    Índice geoespacial em 'centroide' para queries $geoNear e $geoWithin.
 
     Args:
-        df_indicadores: DataFrame with one row per sector, including
-                        'id_setor' and 'geometria' fields.
+        df_indicadores: DataFrame com uma linha por bairro.
     """
+    load_dotenv()
     config = load_config()
     colecao_nome = config["geo_pipeline"]["mongodb"]["colecao_bairros"]
 
-    logging.info(f"Connecting to MongoDB collection: {colecao_nome}")
-    resultado = upsert_dataframe(
-        df=df_indicadores,
-        collection_name=colecao_nome,
-        key_field="id_setor",
-        geo_index_field="geometria",
-    )
+    mongo_uri = os.getenv("MONGO_URI")
+    db_name = os.getenv("MONGO_DB_NAME")
+    if not mongo_uri:
+        raise ValueError("MONGO_URI não definido. Verifique seu .env.")
+    if not db_name:
+        raise ValueError("MONGO_DB_NAME não definido. Verifique seu .env.")
 
-    if resultado is not None:
-        logging.info(
-            f"MongoDB upsert complete: "
-            f"{resultado.upserted_count} inserted, "
-            f"{resultado.modified_count} updated."
+    logger.info(f"Conectando ao MongoDB — coleção: {colecao_nome}")
+    client = MongoClient(mongo_uri)
+    try:
+        colecao = client[db_name][colecao_nome]
+
+        # Índice geoespacial no centróide
+        colecao.create_index([("centroide", "2dsphere")], sparse=True)
+        # Índice único composto para upsert idempotente
+        colecao.create_index(
+            [("bairro", 1), ("municipio", 1)],
+            unique=True,
+            sparse=True,
         )
-    else:
-        logging.warning("No sector indicators to insert.")
+
+        operacoes = []
+        for _, row in df_indicadores.iterrows():
+            bairro = row.get("bairro")
+            municipio = row.get("municipio")
+            if not bairro or not municipio:
+                continue
+
+            doc = {k: v for k, v in row.to_dict().items() if pd.notna(v) or isinstance(v, dict)}
+            operacoes.append(
+                UpdateOne(
+                    {"bairro": bairro, "municipio": municipio},
+                    {"$set": doc},
+                    upsert=True,
+                )
+            )
+
+        if operacoes:
+            resultado = colecao.bulk_write(operacoes, ordered=False)
+            logger.info(
+                f"Upsert concluído: {resultado.upserted_count} inseridos, "
+                f"{resultado.modified_count} atualizados."
+            )
+        else:
+            logger.warning("Nenhum indicador de bairro para inserir.")
+    finally:
+        client.close()
