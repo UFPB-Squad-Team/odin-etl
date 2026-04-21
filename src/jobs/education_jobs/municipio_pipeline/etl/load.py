@@ -38,6 +38,7 @@ def run(df_indicadores: pd.DataFrame) -> None:
         colecao = client[db_name][colecao_nome]
 
         colecao.create_index([("centroide", "2dsphere")], sparse=True)
+        colecao.create_index([("geometria", "2dsphere")], sparse=True)
         colecao.create_index("municipioIdIbge", unique=True, sparse=True)
 
         operacoes = []

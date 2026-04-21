@@ -3,11 +3,12 @@ FROM python:3.12-slim
 WORKDIR /app
 
 ENV PYTHONUNBUFFERED=1
+ENV UV_SYSTEM_PYTHON=1
 
-RUN pip install poetry
+RUN pip install uv
 
-COPY poetry.lock pyproject.toml ./
+COPY pyproject.toml uv.lock ./
 
-RUN poetry install --no-interaction --no-ansi --no-root --only=main
+RUN uv sync --no-dev --frozen
 
 COPY . .

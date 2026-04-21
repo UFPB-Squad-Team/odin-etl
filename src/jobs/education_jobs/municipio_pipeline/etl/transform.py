@@ -1,3 +1,4 @@
+import json
 import logging
 from pathlib import Path
 
@@ -13,6 +14,58 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - [%(levelname)s] - %(message)s",
 )
+
+MUNICIPIOS_GEOJSON = "data/silver/geojs-25-mun (1).json"
+
+
+def _carregar_poligonos_municipios() -> dict:
+    """
+    Carrega o GeoJSON de municípios da PB e retorna um dict
+    {codigo_ibge: geometry_dict} para lookup rápido.
+
+    Geometrias inválidas (ex: Polygon com anéis não contidos) são
+    corrigidas via Shapely antes de retornar.
+    """
+    if not Path(MUNICIPIOS_GEOJSON).exists():
+        logger.warning(f"GeoJSON de municípios não encontrado: {MUNICIPIOS_GEOJSON}. Usando apenas centróides.")
+        return {}
+
+    with open(MUNICIPIOS_GEOJSON, encoding="utf-8") as f:
+        geojson = json.load(f)
+
+    try:
+        from shapely.geometry import shape, mapping
+        from shapely.validation import make_valid
+        use_shapely = True
+    except ImportError:
+        use_shapely = False
+        logger.warning("Shapely não disponível — geometrias inválidas não serão corrigidas.")
+
+    poligonos = {}
+    corrigidos = 0
+    for feature in geojson.get("features", []):
+        props = feature.get("properties", {})
+        codigo = str(props.get("id", "")).strip()
+        geometry = feature.get("geometry")
+        if not codigo or not geometry:
+            continue
+
+        if use_shapely:
+            try:
+                geom = shape(geometry)
+                if not geom.is_valid:
+                    geom = make_valid(geom)
+                    corrigidos += 1
+                geometry = mapping(geom)
+            except Exception as e:
+                logger.warning(f"Não foi possível corrigir geometria do município {codigo}: {e}")
+
+        poligonos[codigo] = geometry
+
+    if corrigidos > 0:
+        logger.info(f"Geometrias corrigidas via Shapely: {corrigidos}")
+    logger.info(f"Polígonos municipais carregados: {len(poligonos)} municípios.")
+    return poligonos
 
 
 def run(storage: StorageBackend = None) -> pd.DataFrame:
@@ -79,6 +132,17 @@ def run(storage: StorageBackend = None) -> pd.DataFrame:
         axis=1,
     )
     df_final = df_final.drop(columns=["lat_media", "lon_media"], errors="ignore")
+
+    # 6. Adicionar polígono real do GeoJSON de municípios
+    poligonos = _carregar_poligonos_municipios()
+    if poligonos:
+        df_final["geometria"] = df_final["municipioIdIbge"].apply(
+            lambda cod: poligonos.get(str(int(cod))) if pd.notna(cod) else None
+        )
+        com_poligono = df_final["geometria"].notna().sum()
+        logger.info(f"Polígonos associados: {com_poligono}/{len(df_final)} municípios.")
+    else:
+        df_final["geometria"] = None
 
     logger.info(f"Agregação por município concluída: {len(df_final)} municípios com escolas.")
     return df_final
