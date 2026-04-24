@@ -1,41 +1,3 @@
-"""
-Biblioteca de Cálculo de Indicadores Socioeconômicos — IBGE Censo 2022
-=======================================================================
-
-Responsabilidade: calcular os 10 indicadores de Prioridade 1 a partir dos
-DataFrames brutos do Silver (gerados pelo extract.py).
-
-Cada função recebe um ou mais DataFrames e retorna um DataFrame com:
-    [chave_geografica, indicador_1, indicador_2, ...]
-
-A chave geográfica é detectada automaticamente (CD_MUN, CD_SETOR ou CD_BAIRRO),
-o que torna todas as funções reutilizáveis para as 3 granularidades.
-
-Mapeamento completo de variáveis:
-    docs/modulo-socioeconomico/MAPEAMENTO_INDICADORES_IBGE_2022.md
-
-Variáveis confirmadas via dicionário oficial do IBGE (abril/2025):
-    ftp.ibge.gov.br/.../dicionario_de_dados_agregados_por_setores_censitarios_20250417.xlsx
-
-Indicadores implementados (Prioridade 1):
-    1.  total_populacao               — basico.v0001
-    2.  media_moradores_por_domicilio — basico.v0005  (vírgula decimal!)
-    3.  pct_criancas_0_9              — demografia
-    4.  pct_idosos_60_mais            — demografia
-    5.  pct_preta_parda               — cor_ou_raca
-    6.  pct_agua_rede_geral           — domicilio2 / basico
-    7.  pct_esgoto_rede_geral         — domicilio2 / basico
-    8.  pct_lixo_coletado             — domicilio2 / basico  (lixo está em domicilio2, não domicilio3!)
-    9.  taxa_analfabetismo_15_mais    — alfabetizacao
-    10. pct_responsavel_feminino      — parentesco
-
-Correções descobertas na EDA (vs. plano original):
-    - v0005 usa vírgula como decimal ("2,9") → precisa de str.replace antes de to_numeric
-    - V00001 não existe nos datasets → usar v0003 (dom. particulares) do basico como denominador
-    - V00397/V00398 (lixo) estão em domicilio2, não em domicilio3
-    - V00901 = não-alfabetizados 15+ (não alfabetizados — nome confuso no dicionário)
-    - V01063 = responsável feminino (dataset parentesco, não alfabetizacao)
-"""
 import logging
 from typing import List
 
@@ -311,7 +273,6 @@ def calcular_saneamento(
     df2 = _to_num(df_domicilio2, ["V00111", "V00309", "V00397", "V00398"])
     dfb = _to_num(df_basico, ["v0003"])
 
-    # Trazer o denominador (v0003) do basico para o domicilio2
     denominador = df2[[chave]].merge(
         dfb[[chave, "v0003"]],
         on=chave,
