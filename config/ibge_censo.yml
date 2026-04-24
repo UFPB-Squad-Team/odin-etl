@@ -1,0 +1,64 @@
+# ODIN-ETL — Configuração do pipeline IBGE Censo Demográfico 2022
+# Fonte: ftp.ibge.gov.br/Censos/Censo_Demografico_2022/Agregados_por_Setores_Censitarios
+
+ftp:
+  host: "ftp.ibge.gov.br"
+  base_dir: "/Censos/Censo_Demografico_2022/Agregados_por_Setores_Censitarios"
+  timeout_segundos: 60
+  max_tentativas: 3
+
+# Filtro geográfico — código IBGE da UF alvo (Paraíba = 25)
+filtro_uf: "25"
+
+csv:
+  encoding: "latin-1"
+  separador: ";"
+
+paths:
+  bronze: "data/bronze"
+  silver: "data/silver"
+
+# Granularidades disponíveis no FTP do IBGE.
+# ftp_dir:          subdiretório dentro de ftp.base_dir
+# prefixo_arquivo:  prefixo do nome do ZIP no FTP
+granularidades:
+  municipio:
+    ftp_dir: "Agregados_por_Municipio_csv"
+    prefixo_arquivo: "Agregados_por_municipios"
+  setor:
+    ftp_dir: "Agregados_por_Setor_csv"
+    prefixo_arquivo: "Agregados_por_setores"
+  bairro:
+    ftp_dir: "Agregados_por_Bairro_csv"
+    prefixo_arquivo: "Agregados_por_bairros"
+
+# Datasets temáticos a baixar.
+# Consulte docs/modulo-socioeconomico para o mapeamento de variáveis por dataset.
+datasets:
+  - basico                       # população total, domicílios (V0001..V0007)
+  - demografia                   # estrutura etária por sexo (V01006..V01041)
+  - cor_ou_raca                  # distribuição racial (V01317..V01321)
+  - caracteristicas_domicilio2   # água, esgoto e lixo (V00111, V00309, V00397, V00398)
+  - caracteristicas_domicilio3   # outros dados de domicílio
+  - alfabetizacao                # alfabetização por faixa etária (V00748..V00760, V00901)
+  - obitos                       # óbitos domiciliares 2019-2022 (V01224...)
+  - parentesco                   # estrutura familiar — responsável feminino (V01042, V01063)
+
+# Arquivos com sufixo de data no nome (ex: _20250417).
+# Verificado diretamente no FTP em abril/2026.
+# Se o IBGE publicar nova versão, atualize os nomes aqui.
+nomes_com_data:
+  Agregados_por_municipios_basico_BR:                     "Agregados_por_municipios_basico_BR_20250417.zip"
+  Agregados_por_municipios_caracteristicas_domicilio2_BR: "Agregados_por_municipios_caracteristicas_domicilio2_BR_20250417.zip"
+  Agregados_por_municipios_caracteristicas_domicilio3_BR: "Agregados_por_municipios_caracteristicas_domicilio3_BR_20250417.zip"
+  Agregados_por_setores_basico_BR:                        "Agregados_por_setores_basico_BR_20250417.zip"
+  Agregados_por_setores_caracteristicas_domicilio2_BR:    "Agregados_por_setores_caracteristicas_domicilio2_BR_20250417.zip"
+  Agregados_por_setores_caracteristicas_domicilio3_BR:    "Agregados_por_setores_caracteristicas_domicilio3_BR_20250417.zip"
+  Agregados_por_bairros_basico_BR:                        "Agregados_por_bairros_basico_BR_20250417.zip"
+  Agregados_por_bairros_caracteristicas_domicilio2_BR:    "Agregados_por_bairros_caracteristicas_domicilio2_BR_20250417.zip"
+  Agregados_por_bairros_caracteristicas_domicilio3_BR:    "Agregados_por_bairros_caracteristicas_domicilio3_BR_20250417.zip"
+
+dicionario:
+  filename: "dicionario_de_dados_agregados_por_setores_censitarios_20250417.xlsx"
+  sheet_name: "Dicionário não PCT"
+  bronze_output: "dicionario_ibge_censo2022.parquet"
