@@ -17,6 +17,7 @@ csv:
 paths:
   bronze: "data/bronze"
   silver: "data/silver"
+  gold:   "data/gold"
 
 # Granularidades disponíveis no FTP do IBGE.
 # ftp_dir:          subdiretório dentro de ftp.base_dir
@@ -62,3 +63,83 @@ dicionario:
   filename: "dicionario_de_dados_agregados_por_setores_censitarios_20250417.xlsx"
   sheet_name: "Dicionário não PCT"
   bronze_output: "dicionario_ibge_censo2022.parquet"
+
+# ---------------------------------------------------------------------------
+# Transform — Município
+# ---------------------------------------------------------------------------
+transform_municipio:
+  # Arquivos Silver de entrada.
+  # Chave: nome lógico usado internamente no transform.
+  # Valor: nome do arquivo no Silver.
+  silver_inputs:
+    basico:       "ibge_censo2022_municipio_basico_pb.parquet"
+    demografia:   "ibge_censo2022_municipio_demografia_pb.parquet"
+    cor_raca:     "ibge_censo2022_municipio_cor_ou_raca_pb.parquet"
+    dom2:         "ibge_censo2022_municipio_caracteristicas_domicilio2_pb.parquet"
+    alfabetizacao:"ibge_censo2022_municipio_alfabetizacao_pb.parquet"
+    parentesco:   "ibge_censo2022_municipio_parentesco_pb.parquet"
+
+  gold_output: "municipio_socioeconomico_pb.parquet"
+
+  # Número esperado de municípios da PB no Censo 2022.
+  municipios_esperados: 223
+
+  # Range de benchmark para a população total da PB.
+  # v0001 conta domicílios particulares — diferença de ~85k para o oficial é esperada.
+  pop_total_min: 3_800_000
+  pop_total_max: 4_200_000
+
+  # Contratos de qualidade derivados da EDA estatística.
+  # Ranges validados contra dados oficiais do IBGE.
+  # Se um valor sair do range, o dado está errado — não o range.
+  # Campos: coluna, min, max, descricao
+  contratos_qualidade:
+    - coluna: total_populacao
+      min: 1000
+      max: 900000
+      descricao: "Pop municipal PB: min ~1.7k, max ~834k"
+
+    - coluna: media_moradores_por_domicilio
+      min: 2.0
+      max: 4.0
+      descricao: "Média moradores: entre 2.0 e 4.0"
+
+    - coluna: pct_criancas_0_9
+      min: 5.0
+      max: 25.0
+      descricao: "Crianças 0-9: entre 5% e 25%"
+
+    - coluna: pct_idosos_60_mais
+      min: 8.0
+      max: 30.0
+      descricao: "Idosos 60+: entre 8% e 30%"
+
+    - coluna: pct_preta_parda
+      min: 5.0
+      max: 85.0
+      descricao: "Preta/parda: entre 5% e 85% (inclui municípios indígenas)"
+
+    - coluna: pct_agua_rede_geral
+      min: 0.0
+      max: 100.0
+      descricao: "Água rede: 0% a 100% (municípios rurais podem ter 0%)"
+
+    - coluna: pct_esgoto_rede_geral
+      min: 0.0
+      max: 100.0
+      descricao: "Esgoto rede: 0% a 100%"
+
+    - coluna: pct_lixo_coletado
+      min: 0.0
+      max: 100.0
+      descricao: "Lixo coletado: 0% a 100%"
+
+    - coluna: taxa_analfabetismo_15_mais
+      min: 3.0
+      max: 40.0
+      descricao: "Analfabetismo 15+: entre 3% e 40%"
+
+    - coluna: pct_responsavel_feminino
+      min: 25.0
+      max: 80.0
+      descricao: "Responsável feminino: entre 25% e 80%"
