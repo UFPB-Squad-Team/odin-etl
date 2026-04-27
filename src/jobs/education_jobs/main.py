@@ -3,10 +3,7 @@ from datetime import datetime
 
 from src.jobs.education_jobs.censo_pipeline.main import run_pipeline as run_censo
 from src.jobs.education_jobs.geocode_pipeline.main import run as run_geocode
-from src.jobs.education_jobs.indicadores_base_dos_dados_pipeline.main import (
-    run as run_indicadores,
-)
-from src.jobs.education_jobs.inep_resultados_pipeline.main import run as run_inep
+from src.jobs.education_jobs.inep_indicadores_pipeline.main import run as run_indicadores  # substituiu Base dos Dados
 from src.jobs.education_jobs.geo_ingest_pipeline.main import run as run_geo_ingest
 from src.jobs.education_jobs.bairro_pipeline.main import run as run_bairro
 from src.jobs.education_jobs.municipio_pipeline.main import run as run_municipio

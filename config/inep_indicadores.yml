@@ -1,0 +1,253 @@
+paths:
+  bronze: "data/bronze/inep_indicadores"
+  silver: "data/silver"
+  gold:   "data/gold"
+
+filtro_uf: "PB"
+
+# Dependências administrativas a incluir (exclui privadas — sem geocodificação disponível)
+# 1=Federal, 2=Estadual, 3=Municipal, 4=Privada
+filtro_dependencias: ["Federal", "Estadual", "Municipal"]
+
+gold_output: "indicadores_base_dos_dados.parquet"
+
+
+fontes:
+
+  atu:
+    sigla: "ATU"
+    descricao: "Média de Alunos por Turma"
+    url: "https://download.inep.gov.br/informacoes_estatisticas/indicadores_educacionais/2025/ATU_2025_ESCOLAS.zip"
+    ano: 2025
+    header_row: 8
+    # Colunas de interesse por nível de ensino (sufixo _CAT_0 = total geral)
+    colunas:
+      ei:  "ED_INF_CAT_0"   # Educação Infantil
+      ef:  "FUN_CAT_0"      # Ensino Fundamental total
+      efi: "FUN_AI_CAT_0"   # EF Anos Iniciais
+      eff: "FUN_AF_CAT_0"   # EF Anos Finais
+      em:  "MED_CAT_0"      # Ensino Médio
+
+  had:
+    sigla: "HAD"
+    descricao: "Média de Horas-Aula Diária"
+    url: "https://download.inep.gov.br/informacoes_estatisticas/indicadores_educacionais/2025/HAD_2025_ESCOLAS.zip"
+    ano: 2025
+    header_row: 8
+    colunas:
+      ei:  "ED_INF_CAT_0"
+      ef:  "FUN_CAT_0"
+      efi: "FUN_AI_CAT_0"
+      eff: "FUN_AF_CAT_0"
+      em:  "MED_CAT_0"
+
+  dsu:
+    sigla: "DSU"
+    descricao: "Percentual de Docentes com Curso Superior"
+    url: "https://download.inep.gov.br/informacoes_estatisticas/indicadores_educacionais/2025/DSU_2025_ESCOLAS.zip"
+    ano: 2025
+    header_row: 9
+    colunas:
+      ei:  "ED_INF_CAT_0"
+      ef:  "FUN_CAT_0"
+      efi: "FUN_AI_CAT_0"
+      eff: "FUN_AF_CAT_0"
+      em:  "MED_CAT_0"
+
+  tdi:
+    sigla: "TDI"
+    descricao: "Taxa de Distorção Idade-Série"
+    url: "https://download.inep.gov.br/informacoes_estatisticas/indicadores_educacionais/2025/TDI_2025_ESCOLAS.zip"
+    ano: 2025
+    header_row: 8
+    colunas:
+      ef:  "FUN_CAT_0"
+      efi: "FUN_AI_CAT_0"
+      eff: "FUN_AF_CAT_0"
+      em:  "MED_CAT_0"
+
+  afd:
+    sigla: "AFD"
+    descricao: "Adequação da Formação Docente"
+    url: "https://download.inep.gov.br/informacoes_estatisticas/indicadores_educacionais/2025/AFD_2025_ESCOLAS.zip"
+    ano: 2025
+    header_row: 10
+    # AFD tem grupos 1-5 (% docentes em cada categoria de adequação)
+    # Grupo 1 = mais adequado, Grupo 5 = sem formação
+    # Para compatibilidade com Base dos Dados, usamos a soma dos grupos 1+2 (adequados)
+    colunas:
+      ei_g1:  "ED_INF_CAT_1"
+      ei_g2:  "ED_INF_CAT_2"
+      ef_g1:  "FUN_CAT_1"
+      ef_g2:  "FUN_CAT_2"
+      efi_g1: "FUN_AI_CAT_1"
+      efi_g2: "FUN_AI_CAT_2"
+      eff_g1: "FUN_AF_CAT_1"
+      eff_g2: "FUN_AF_CAT_2"
+      em_g1:  "MED_CAT_1"
+      em_g2:  "MED_CAT_2"
+
+  ied:
+    sigla: "IED"
+    descricao: "Irregularidade do Corpo Docente"
+    url: "https://download.inep.gov.br/informacoes_estatisticas/indicadores_educacionais/2025/IED_2025_ESCOLAS.zip"
+    ano: 2025
+    header_row: 10
+    # IED tem níveis 1-6 (% docentes em cada nível de regularidade)
+    # Nível 1 = mais regular, Nível 6 = mais irregular
+    colunas:
+      ef_n1:  "FUN_CAT_1"
+      ef_n2:  "FUN_CAT_2"
+      efi_n1: "FUN_AI_CAT_1"
+      efi_n2: "FUN_AI_CAT_2"
+      eff_n1: "FUN_AF_CAT_1"
+      eff_n2: "FUN_AF_CAT_2"
+      em_n1:  "MED_CAT_1"
+      em_n2:  "MED_CAT_2"
+
+  icg:
+    sigla: "ICG"
+    descricao: "Complexidade de Gestão da Escola"
+    url: "https://download.inep.gov.br/informacoes_estatisticas/indicadores_educacionais/2025/ICG_2025_ESCOLAS.zip"
+    ano: 2025
+    header_row: 10
+    colunas:
+      nivel: "COMPLEX"   # Nível de complexidade (1-6)
+
+  tnr:
+    sigla: "TNR"
+    descricao: "Taxa de Não-Resposta"
+    url: "https://download.inep.gov.br/informacoes_estatisticas/indicadores_educacionais/2024/tnr_escolas_2024.zip"
+    ano: 2024
+    header_row: 8
+    # TNR usa prefixo 4_CAT_
+    colunas:
+      ef:  "4_CAT_FUN"
+      efi: "4_CAT_FUN_AI"
+      eff: "4_CAT_FUN_AF"
+      em:  "4_CAT_MED"
+
+  tx_rend:
+    sigla: "TX_REND"
+    descricao: "Taxas de Rendimento (aprovação, reprovação, abandono)"
+    url: "https://download.inep.gov.br/informacoes_estatisticas/indicadores_educacionais/2024/tx_rend_escolas_2024.zip"
+    ano: 2024
+    header_row: 8
+    # Prefixos: 1=aprovação, 2=reprovação, 3=abandono
+    colunas:
+      aprovacao_ef:   "1_CAT_FUN"
+      aprovacao_efi:  "1_CAT_FUN_AI"
+      aprovacao_eff:  "1_CAT_FUN_AF"
+      aprovacao_em:   "1_CAT_MED"
+      reprovacao_ef:  "2_CAT_FUN"
+      reprovacao_efi: "2_CAT_FUN_AI"
+      reprovacao_eff: "2_CAT_FUN_AF"
+      reprovacao_em:  "2_CAT_MED"
+      abandono_ef:    "3_CAT_FUN"
+      abandono_efi:   "3_CAT_FUN_AI"
+      abandono_eff:   "3_CAT_FUN_AF"
+      abandono_em:    "3_CAT_MED"
+
+  ideb_ai:
+    sigla: "IDEB_AI"
+    descricao: "IDEB — Ensino Fundamental Anos Iniciais"
+    url: "https://download.inep.gov.br/ideb/resultados/divulgacao_anos_iniciais_escolas_2023.zip"
+    ano: 2023
+    header_row: 9
+    # Chave: ID_ESCOLA (não CO_ENTIDADE — padrão diferente do INEP para IDEB)
+    chave_escola: "ID_ESCOLA"
+    colunas:
+      ideb:          "VL_OBSERVADO_2023"   # IDEB observado
+      meta:          "VL_META_2023"        # Meta IDEB
+      nota_mat:      "VL_NOTA_MATEMATICA_2023"
+      nota_port:     "VL_NOTA_PORTUGUES_2023"
+      nota_media:    "VL_NOTA_MEDIA_2023"
+
+  ideb_af:
+    sigla: "IDEB_AF"
+    descricao: "IDEB — Ensino Fundamental Anos Finais"
+    url: "https://download.inep.gov.br/ideb/resultados/divulgacao_anos_finais_escolas_2023.zip"
+    ano: 2023
+    header_row: 9
+    chave_escola: "ID_ESCOLA"
+    colunas:
+      ideb:          "VL_OBSERVADO_2023"
+      meta:          "VL_META_2023"
+      nota_mat:      "VL_NOTA_MATEMATICA_2023"
+      nota_port:     "VL_NOTA_PORTUGUES_2023"
+      nota_media:    "VL_NOTA_MEDIA_2023"
+
+  ideb_em:
+    sigla: "IDEB_EM"
+    descricao: "IDEB — Ensino Médio"
+    url: "https://download.inep.gov.br/ideb/resultados/divulgacao_ensino_medio_escolas_2023.zip"
+    ano: 2023
+    header_row: 9
+    chave_escola: "ID_ESCOLA"
+    colunas:
+      ideb:          "VL_OBSERVADO_2023"
+      meta:          "VL_META_2023"
+      nota_mat:      "VL_NOTA_MATEMATICA_2023"
+      nota_port:     "VL_NOTA_PORTUGUES_2023"
+      nota_media:    "VL_NOTA_MEDIA_2023"
+
+# =============================================================
+# Mapeamento para o schema do Gold (compatibilidade com pipeline antigo)
+# Garante que o document_builder.py não precisa mudar.
+# =============================================================
+schema_gold:
+  # Campos de identidade
+  id_escola:    "CO_ENTIDADE"
+  id_municipio: "CO_MUNICIPIO"
+  localizacao:  "NO_CATEGORIA"    # Rural / Urbana
+  rede:         "NO_DEPENDENCIA"  # Federal / Estadual / Municipal
+
+  # Indicadores por nível — nomes compatíveis com o transform antigo
+  educacao_infantil:
+    alunos_por_turma:   "atu_ei"
+    horas_aula_diarias: "had_ei"
+    docentes_superior:  "dsu_ei"
+    afd:                "afd_ei"
+
+  fundamental_anos_iniciais:
+    alunos_por_turma:   "atu_efi"
+    horas_aula_diarias: "had_efi"
+    docentes_superior:  "dsu_efi"
+    tdi:                "tdi_efi"
+    taxa_aprovacao:     "tx_rend_aprovacao_efi"
+    taxa_reprovacao:    "tx_rend_reprovacao_efi"
+    taxa_abandono:      "tx_rend_abandono_efi"
+    tnr:                "tnr_efi"
+    afd:                "afd_efi"
+    ied:                "ied_efi"
+
+  fundamental_anos_finais:
+    alunos_por_turma:   "atu_eff"
+    horas_aula_diarias: "had_eff"
+    docentes_superior:  "dsu_eff"
+    tdi:                "tdi_eff"
+    taxa_aprovacao:     "tx_rend_aprovacao_eff"
+    taxa_reprovacao:    "tx_rend_reprovacao_eff"
+    taxa_abandono:      "tx_rend_abandono_eff"
+    tnr:                "tnr_eff"
+    afd:                "afd_eff"
+    ied:                "ied_eff"
+
+  ensino_medio:
+    alunos_por_turma:   "atu_em"
+    horas_aula_diarias: "had_em"
+    docentes_superior:  "dsu_em"
+    tdi:                "tdi_em"
+    taxa_aprovacao:     "tx_rend_aprovacao_em"
+    taxa_reprovacao:    "tx_rend_reprovacao_em"
+    taxa_abandono:      "tx_rend_abandono_em"
+    tnr:                "tnr_em"
+    afd:                "afd_em"
+    ied:                "ied_em"
+
+  icg_nivel_complexidade_gestao_escola: "icg_nivel"
+
+  # IDEB por nível (2023)
+  ideb_anos_iniciais:  "ideb_ai_ideb"
+  ideb_anos_finais:    "ideb_af_ideb"
+  ideb_ensino_medio:   "ideb_em_ideb"

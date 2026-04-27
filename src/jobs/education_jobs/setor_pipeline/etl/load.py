@@ -1,46 +1,56 @@
-"""
-Setor Pipeline — Load
 
-Upsert de indicadores por setor censitário na coleção MongoDB 'setor_indicadores'.
-
-Schema do documento:
-  cd_setor          — código único do setor (15 dígitos), chave de upsert
-  nome_area         — bairro oficial (se existir) ou nome do município
-  nm_bairro         — nome do bairro oficial (vazio para interior/rural)
-  nm_municipio      — nome do município
-  co_municipio      — código IBGE do município (7 dígitos)
-  situacao          — "Urbana" ou "Rural"
-  tipo_setor        — "comum", "aglomerado_subnormal", etc.
-  tem_bairro_oficial — bool: true se o setor tem bairro delimitado pelo IBGE
-  geometria         — GeoJSON Polygon (índice 2dsphere para $geoIntersects)
-  total_escolas     — quantidade de escolas no setor
-  total_matriculas  — soma de matrículas (fund + médio + infantil)
-  pct_com_internet  — % de escolas com internet
-  pct_com_biblioteca — % de escolas com biblioteca
-  pct_com_lab_informatica — % de escolas com laboratório de informática
-  pct_sem_acessibilidade  — % de escolas sem nenhuma acessibilidade
-"""
 import logging
 import os
+from typing import Any, Optional
 
 import pandas as pd
 from dotenv import load_dotenv
 from pymongo import MongoClient, UpdateOne
-
-from src.common.utils import load_config
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - [%(levelname)s] - %(message)s")
 
 COLECAO = "setor_indicadores"
 
+_CAMPOS_ROOT = {
+    "cd_setor", "co_municipio", "nm_municipio", "nome_area",
+    "nm_bairro", "situacao", "tipo_setor", "tem_bairro_oficial", "geometria",
+}
+
+_CAMPOS_EDUCACAO = {
+    "total_escolas": "totalEscolas",
+    "total_matriculas": "totalMatriculas",
+    "pct_com_internet": "pctComInternet",
+    "pct_com_biblioteca": "pctComBiblioteca",
+    "pct_com_lab_informatica": "pctComLabInformatica",
+    "pct_sem_acessibilidade": "pctSemAcessibilidade",
+    "media_ideb_anos_iniciais": "mediaIdebAnosIniciais",
+    "media_ideb_anos_finais": "mediaIdebAnosFinals",
+    "media_inse": "mediaInse",
+}
+
+
+def _val(x: Any) -> Any:
+    if x is None:
+        return None
+    if isinstance(x, dict):
+        return x
+    try:
+        if pd.isna(x):
+            return None
+    except (TypeError, ValueError):
+        pass
+    if hasattr(x, "item"):
+        return x.item()
+    return x
+
 
 def run(df_indicadores: pd.DataFrame) -> None:
     """
-    Upsert de indicadores por setor censitário no MongoDB.
+    Upsert de indicadores educacionais por setor no MongoDB.
 
-    Chave de upsert: cd_setor (único por setor em toda a PB)
-    Índice geoespacial: geometria (2dsphere) para queries $geoIntersects
+    Chave de upsert: cd_setor
+    $set cirúrgico em 'educacao' — não toca em 'socioeconomico'.
     """
     load_dotenv()
 
@@ -56,33 +66,44 @@ def run(df_indicadores: pd.DataFrame) -> None:
     try:
         colecao = client[db_name][COLECAO]
 
-        # Índice geoespacial para queries de rua ($geoIntersects)
         colecao.create_index([("geometria", "2dsphere")], sparse=True)
-        # Índice único no código do setor
         colecao.create_index("cd_setor", unique=True, sparse=True)
-        # Índice para busca por município
-        colecao.create_index("co_municipio")
-        # Índice para busca por nome de área (bairro ou município)
+        colecao.create_index("co_municipio", name="idx_setor_indicadores_co_municipio")
         colecao.create_index("nome_area")
 
         operacoes = []
         for _, row in df_indicadores.iterrows():
-            cd_setor = row.get("cd_setor")
-            if not cd_setor or pd.isna(cd_setor):
+            cd_setor = _val(row.get("cd_setor"))
+            if not cd_setor:
                 continue
+            cd_setor = str(cd_setor)
 
-            # Montar documento limpo (sem NaN)
-            doc = {}
-            for k, v in row.to_dict().items():
-                if isinstance(v, dict):
-                    doc[k] = v  # GeoJSON geometry — manter sempre
-                elif pd.notna(v):
-                    doc[k] = v
+            set_payload: dict = {}
+            for campo in _CAMPOS_ROOT:
+                v = _val(row.get(campo))
+                if v is not None:
+                    set_payload[campo] = v
+
+            educacao = {}
+            for col_src, col_dest in _CAMPOS_EDUCACAO.items():
+                v = _val(row.get(col_src))
+                if v is not None:
+                    educacao[col_dest] = v
+
+            if educacao:
+                set_payload["educacao"] = educacao
+
+            _CAMPOS_LEGADOS = [
+                "total_escolas", "total_matriculas", "pct_com_internet",
+                "pct_com_biblioteca", "pct_com_lab_informatica", "pct_sem_acessibilidade",
+                "media_ideb_anos_iniciais", "media_ideb_anos_finais", "media_inse",
+            ]
+            unset_payload = {campo: "" for campo in _CAMPOS_LEGADOS}
 
             operacoes.append(
                 UpdateOne(
-                    {"cd_setor": str(cd_setor)},
-                    {"$set": doc},
+                    {"cd_setor": cd_setor},
+                    {"$set": set_payload, "$unset": unset_payload},
                     upsert=True,
                 )
             )

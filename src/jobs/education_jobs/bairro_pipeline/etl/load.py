@@ -1,5 +1,6 @@
 import logging
 import os
+from typing import Any, Optional
 
 import pandas as pd
 from dotenv import load_dotenv
@@ -14,15 +15,68 @@ logging.basicConfig(
 )
 
 
+def _val(x: Any) -> Any:
+    if x is None:
+        return None
+    if isinstance(x, dict):
+        return x
+    try:
+        if pd.isna(x):
+            return None
+    except (TypeError, ValueError):
+        pass
+    if hasattr(x, "item"):
+        return x.item()
+    return x
+
+
+def _int_val(x: Any) -> Optional[int]:
+    v = _val(x)
+    if v is None:
+        return None
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _float_val(x: Any, decimais: int = 1) -> Optional[float]:
+    v = _val(x)
+    if v is None:
+        return None
+    try:
+        return round(float(v), decimais)
+    except (TypeError, ValueError):
+        return None
+
+
+def _construir_educacao(row: pd.Series) -> dict:
+    doc = {
+        "totalEscolas": _int_val(row.get("total_escolas")),
+        "totalMatriculas": _int_val(row.get("total_matriculas")),
+        "pctComInternet": _float_val(row.get("pct_com_internet")),
+        "pctComBiblioteca": _float_val(row.get("pct_com_biblioteca")),
+        "pctComLabInformatica": _float_val(row.get("pct_com_lab_informatica")),
+        "pctSemAcessibilidade": _float_val(row.get("pct_sem_acessibilidade")),
+    }
+    # INEP — opcionais
+    for campo, col in [
+        ("mediaIdebAnosIniciais", "media_ideb_anos_iniciais"),
+        ("mediaIdebAnosFinals", "media_ideb_anos_finais"),
+        ("mediaInse", "media_inse"),
+    ]:
+        v = _float_val(row.get(col), decimais=2)
+        if v is not None:
+            doc[campo] = v
+    return doc
+
+
 def run(df_indicadores: pd.DataFrame) -> None:
     """
-    Upsert de indicadores por bairro no MongoDB.
+    Upsert de indicadores educacionais por bairro no MongoDB.
 
-    Chave de upsert composta: { bairro, municipio }
-    Índice geoespacial em 'centroide' para queries $geoNear e $geoWithin.
-
-    Args:
-        df_indicadores: DataFrame com uma linha por bairro.
+    Chave de upsert: cd_bairro (código IBGE — alinhado com socioeconomico_jobs)
+    $set cirúrgico em 'educacao' — não toca em 'socioeconomico'.
     """
     load_dotenv()
     config = load_config()
@@ -40,27 +94,43 @@ def run(df_indicadores: pd.DataFrame) -> None:
     try:
         colecao = client[db_name][colecao_nome]
 
-        # Índice geoespacial no centróide
+        colecao.create_index("cd_bairro", unique=True, sparse=True)
+        colecao.create_index([("geometria", "2dsphere")], sparse=True)
         colecao.create_index([("centroide", "2dsphere")], sparse=True)
-        # Índice único composto para upsert idempotente
-        colecao.create_index(
-            [("bairro", 1), ("municipio", 1)],
-            unique=True,
-            sparse=True,
-        )
+        colecao.create_index("cd_municipio")
 
         operacoes = []
         for _, row in df_indicadores.iterrows():
-            bairro = row.get("bairro")
-            municipio = row.get("municipio")
-            if not bairro or not municipio:
+            # O transform de educação usa 'cd_bairro_ibge' como nome da coluna
+            cd_bairro = _val(row.get("cd_bairro_ibge") or row.get("cd_bairro") or row.get("CD_BAIRRO"))
+            if cd_bairro is None:
                 continue
+            cd_bairro = str(cd_bairro)
 
-            doc = {k: v for k, v in row.to_dict().items() if pd.notna(v) or isinstance(v, dict)}
+            educacao = _construir_educacao(row)
+
+            campos_compartilhados: dict = {
+                "cd_bairro": cd_bairro,
+                "educacao": educacao,
+            }
+
+            # Campos geo/identidade — atualiza se disponível
+            for dest, src in [
+                ("nm_bairro", "bairro"),
+                ("nm_municipio", "municipio"),
+                ("cd_municipio", "municipioIdIbge"),
+            ]:
+                v = _val(row.get(src))
+                if v is not None:
+                    campos_compartilhados[dest] = str(v) if dest == "cd_municipio" else v
+
+            if _val(row.get("geometria")) is not None:
+                campos_compartilhados["geometria"] = row["geometria"]
+
             operacoes.append(
                 UpdateOne(
-                    {"bairro": bairro, "municipio": municipio},
-                    {"$set": doc},
+                    {"cd_bairro": cd_bairro},
+                    {"$set": campos_compartilhados},
                     upsert=True,
                 )
             )

@@ -88,12 +88,34 @@ def run(storage: StorageBackend = None) -> pd.DataFrame:
 
     # 1. Carregar escolas — usar Silver do geocode extract (tem CO_CEP)
     escolas_path = str(Path(paths["gold"]) / geocode_cfg["gold_output"])
-    df_escolas = storage.read_parquet(escolas_path)
+    df_gold = storage.read_parquet(escolas_path)
 
-    if "documento" in df_escolas.columns and "CO_CEP" not in df_escolas.columns:
+    if "documento" in df_gold.columns and "CO_CEP" not in df_gold.columns:
         df_censo_path = str(Path(paths["silver"]) / config["geocode_pipeline"]["extract"]["silver_output"])
         df_escolas = storage.read_parquet(df_censo_path)
         logger.info(f"Usando Silver do geocode extract: {len(df_escolas)} escolas")
+    else:
+        df_escolas = df_gold
+
+    # Extrair IDEB do Gold geocodificado e adicionar como colunas planas
+    if "documento" in df_gold.columns:
+        ideb_rows = []
+        for _, row in df_gold.iterrows():
+            doc = row.get("documento")
+            escola_id = row.get("escolaIdInep")
+            if not isinstance(doc, dict):
+                continue
+            ind = doc.get("indicadores") or {}
+            ideb_rows.append({
+                "CO_ENTIDADE": str(escola_id),
+                "ideb_anos_iniciais": ind.get("idebAnosIniciais"),
+                "ideb_anos_finais":   ind.get("idebAnosFinais"),
+            })
+        if ideb_rows:
+            df_ideb = pd.DataFrame(ideb_rows)
+            df_escolas = df_escolas.merge(df_ideb, on="CO_ENTIDADE", how="left")
+            logger.info("IDEB adicionado: %d escolas com ideb_anos_iniciais",
+                        df_ideb["ideb_anos_iniciais"].notna().sum())
 
     # 2. Enriquecer com município padronizado via CEP
     df = enriquecer_com_cep(df_escolas, cep_path=cep_path)

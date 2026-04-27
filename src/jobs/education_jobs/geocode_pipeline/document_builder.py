@@ -1,10 +1,3 @@
-"""
-Helpers to build and normalize the school read-model document.
-
-These functions are intentionally pure so they can be reused and tested
-without side effects.
-"""
-
 import numpy as np
 import pandas as pd
 
@@ -84,6 +77,15 @@ def _to_bool(value):
         return bool(int(float(value)))
     except Exception:
         return bool(value)
+
+
+def _to_float(value):
+    if _is_missing(value):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _map_dependencia(value):
@@ -191,6 +193,9 @@ def _build_indicadores(row: pd.Series) -> dict:
             "zonaLocalizacao": zona,
             "redeAdministrativa": rede,
             "complexidadeGestao": raw.get("icg_nivel_complexidade_gestao_escola"),
+            "idebAnosIniciais": _to_float(raw.get("ideb_anos_iniciais")),
+            "idebAnosFinais":   _to_float(raw.get("ideb_anos_finais")),
+            "idebEnsinoMedio":  _to_float(raw.get("ideb_ensino_medio")),
             "educacaoInfantil": raw.get("educacao_infantil"),
             "fundamentalAnosIniciais": raw.get("fundamental_anos_iniciais"),
             "fundamentalAnosFinais": raw.get("fundamental_anos_finais"),
