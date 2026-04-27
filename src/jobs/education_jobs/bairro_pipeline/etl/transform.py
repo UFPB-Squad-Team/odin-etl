@@ -35,9 +35,8 @@ def _extrair_coordenadas(df_gold: pd.DataFrame) -> pd.DataFrame:
         coords = loc.get("coordinates")
         if coords is None or len(coords) < 2:
             continue
-        coords = list(coords)  # garante lista Python, não numpy array
+        coords = list(coords)
         lon, lat = coords[0], coords[1]
-        # Ignorar coordenadas placeholder (-999)
         if lat == -999.0 or lon == -999.0:
             continue
         registros.append({
@@ -67,7 +66,6 @@ def run(storage: StorageBackend = None) -> pd.DataFrame:
     metricas = config["geo_pipeline"]["colunas_metricas"]
     geocode_cfg = config["geocode_pipeline"]["transform"]
 
-    # 1. Carregar Gold geocodificado e extrair coordenadas
     gold_path = str(Path(paths["gold"]) / geocode_cfg["gold_output"])
     logger.info(f"Lendo Gold geocodificado de: {gold_path}")
     df_gold = storage.read_parquet(gold_path)
@@ -81,7 +79,6 @@ def run(storage: StorageBackend = None) -> pd.DataFrame:
 
     gdf_escolas = _escolas_para_geodataframe(df_coords)
 
-    # 2. Carregar shapefile de bairros IBGE
     if not Path(BAIRROS_GPKG).exists():
         raise FileNotFoundError(
             f"GeoPackage de bairros não encontrado: {BAIRROS_GPKG}\n"
@@ -103,16 +100,33 @@ def run(storage: StorageBackend = None) -> pd.DataFrame:
         logger.warning(f"{sem_bairro} escola(s) fora de qualquer polígono de bairro.")
     logger.info(f"Escolas associadas a bairros: {len(gdf_joined)}")
 
-    # 4. Join com Silver do censo para obter colunas de infraestrutura/matrículas
     silver_path = str(Path(paths["silver"]) / config["geocode_pipeline"]["extract"]["silver_output"])
     logger.info(f"Carregando Silver do censo de: {silver_path}")
     df_censo = storage.read_parquet(silver_path)
     df_censo["CO_ENTIDADE"] = df_censo["CO_ENTIDADE"].astype(str)
+    if "SG_UF" in df_censo.columns:
+        df_censo = df_censo[df_censo["SG_UF"] == "PB"].copy()
+
+    ideb_rows = []
+    for _, row in df_gold.iterrows():
+        doc = row.get("documento")
+        escola_id = row.get("escolaIdInep")
+        if not isinstance(doc, dict):
+            continue
+        ind = doc.get("indicadores") or {}
+        ideb_rows.append({
+            "CO_ENTIDADE": str(escola_id),
+            "ideb_anos_iniciais": ind.get("idebAnosIniciais"),
+            "ideb_anos_finais":   ind.get("idebAnosFinais"),
+        })
+    if ideb_rows:
+        df_ideb = pd.DataFrame(ideb_rows)
+        df_censo = df_censo.merge(df_ideb, on="CO_ENTIDADE", how="left")
+        logger.info(f"IDEB adicionado: {df_ideb['ideb_anos_iniciais'].notna().sum()} escolas com IDEB")
 
     df_joined_censo = gdf_joined.merge(df_censo, on="CO_ENTIDADE", how="left")
     logger.info(f"Escolas com dados do censo após join: {df_joined_censo['CO_ENTIDADE'].notna().sum()}")
 
-    # 5. Agregar métricas por bairro (CD_BAIRRO como chave)
     logger.info("Calculando indicadores por bairro...")
     df_indicadores = calcular_indicadores(
         df=df_joined_censo,
@@ -120,7 +134,6 @@ def run(storage: StorageBackend = None) -> pd.DataFrame:
         config=metricas,
     )
 
-    # 6. Recuperar metadados do bairro (nome, município, polígono)
     bairro_meta = gdf_bairros.set_index("CD_BAIRRO")[["NM_BAIRRO", "NM_MUN", "CD_MUN", "geometry"]]
     df_final = df_indicadores.merge(bairro_meta, left_on="CD_BAIRRO", right_index=True, how="left")
 
@@ -131,7 +144,6 @@ def run(storage: StorageBackend = None) -> pd.DataFrame:
         "CD_MUN": "municipioIdIbge",
     })
 
-    # 7. Converter polígono para GeoJSON
     df_final["geometria"] = df_final["geometry"].apply(
         lambda g: poligono_para_geojson(g) if g is not None and not pd.isna(g) else None
     )

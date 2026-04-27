@@ -106,6 +106,28 @@ def run(
     df_censo = storage.read_parquet(silver_path)
     df_censo["CO_ENTIDADE"] = df_censo["CO_ENTIDADE"].astype(str)
 
+    # Extrair IDEB do Gold geocodificado e adicionar ao censo
+    gold_path = str(Path(paths["gold"]) / config["geocode_pipeline"]["transform"]["gold_output"])
+    if Path(gold_path).exists():
+        df_gold = storage.read_parquet(gold_path)
+        ideb_rows = []
+        for _, row in df_gold.iterrows():
+            doc = row.get("documento")
+            escola_id = row.get("escolaIdInep")
+            if not isinstance(doc, dict):
+                continue
+            ind = doc.get("indicadores") or {}
+            ideb_rows.append({
+                "CO_ENTIDADE": str(escola_id),
+                "ideb_anos_iniciais": ind.get("idebAnosIniciais"),
+                "ideb_anos_finais":   ind.get("idebAnosFinais"),
+            })
+        if ideb_rows:
+            df_ideb = pd.DataFrame(ideb_rows)
+            df_censo = df_censo.merge(df_ideb, on="CO_ENTIDADE", how="left")
+            logger.info("IDEB adicionado: %d escolas com ideb_anos_iniciais",
+                        df_ideb["ideb_anos_iniciais"].notna().sum())
+
     # Join com dados do censo
     df_joined = gdf_joined.merge(df_censo, on="CO_ENTIDADE", how="left")
     logger.info(f"Escolas com dados do censo: {df_joined['CO_ENTIDADE'].notna().sum()}")
