@@ -3,66 +3,71 @@
 	run-geocode-extract run-geocode-transform run-geocode-load run-geocode \
 	run-geo-ingest run-bairro run-municipio run-geo-phase2 \
 	run-education \
-	docs-to-pdf docs-to-pdf-socioeconomico
+	docs-to-pdf docs-to-pdf-socioeconomico \
+	prod-up prod-down prod-logs prod-deploy prod-shell prod-status
 
-build: ## Build Docker images
-	docker-compose build
+# ============================================================
+# Desenvolvimento local
+# ============================================================
 
-run: ## Start containers in detached mode
-	docker-compose up -d
+build: ## Build Docker images (dev)
+	docker compose build
 
-down: ## Stop and remove containers, networks, and volumes
-	docker-compose down -v
+run: ## Start MongoDB in detached mode (dev)
+	docker compose up -d mongo
 
-logs: ## Tail logs from all containers
-	docker-compose logs -f
+down: ## Stop and remove containers (dev)
+	docker compose down
 
-rebuild: ## Rebuild Docker images without cache
-	docker-compose build --no-cache
+logs: ## Tail logs from all containers (dev)
+	docker compose logs -f
 
-clean: ## Stop containers and remove local images
-	docker-compose down -v --rmi local
+rebuild: ## Rebuild Docker images without cache (dev)
+	docker compose build --no-cache
 
-restart: ## Restart all containers
-	docker-compose down && docker-compose up -d
+clean: ## Stop containers and remove local images (dev)
+	docker compose down -v --rmi local
 
-shell: ## Open an interactive shell in the ETL container
-	docker-compose exec etl bash
+restart: ## Restart all containers (dev)
+	docker compose down && docker compose up -d
+
+shell: ## Open an interactive shell in the ETL container (dev)
+	docker compose run --rm etl bash
 
 run-censo: ## Run the full censo_pipeline (download -> filter -> parquet)
-	docker-compose run --rm etl python -m src.jobs.education_jobs.censo_pipeline.main
+	docker compose run --rm etl python -m src.jobs.education_jobs.censo_pipeline.main
 
 run-geocode-extract: ## Run only the geocode extract step
-	docker-compose run --rm etl python -m src.jobs.education_jobs.geocode_pipeline.etl.extract
+	docker compose run --rm etl python -m src.jobs.education_jobs.geocode_pipeline.etl.extract
 
 run-geocode-transform: ## Run only the geocode transform step
-	docker-compose run --rm etl python -m src.jobs.education_jobs.geocode_pipeline.etl.transform
+	docker compose run --rm etl python -m src.jobs.education_jobs.geocode_pipeline.etl.transform
 
 run-geocode-load: ## Run only the geocode load step
-	docker-compose run --rm etl python -m src.jobs.education_jobs.geocode_pipeline.etl.load
+	docker compose run --rm etl python -m src.jobs.education_jobs.geocode_pipeline.etl.load
 
 run-geocode: ## Run the full geocode pipeline (extract -> transform -> load)
-	docker-compose run --rm etl python -m src.jobs.education_jobs.geocode_pipeline.main
+	docker compose run --rm etl python -m src.jobs.education_jobs.geocode_pipeline.main
 
 run-geo-ingest: ## Process IBGE shapefiles (bairros + municipios) -> Silver
-	docker-compose run --rm etl python -m src.jobs.education_jobs.geo_ingest_pipeline.main
+	docker compose run --rm etl python -m src.jobs.education_jobs.geo_ingest_pipeline.main
 
 run-bairro: ## Aggregate indicators by neighborhood -> MongoDB bairro_indicadores
-	docker-compose run --rm etl python -m src.jobs.education_jobs.bairro_pipeline.main
+	docker compose run --rm etl python -m src.jobs.education_jobs.bairro_pipeline.main
 
 run-municipio: ## Aggregate indicators by municipality -> MongoDB municipio_indicadores
-	docker-compose run --rm etl python -m src.jobs.education_jobs.municipio_pipeline.main
+	docker compose run --rm etl python -m src.jobs.education_jobs.municipio_pipeline.main
 
 run-geo-phase2: ## Run geo-ingest + bairro + municipio in sequence
-	docker-compose run --rm etl python -m src.jobs.education_jobs.geo_ingest_pipeline.main
-	docker-compose run --rm etl python -m src.jobs.education_jobs.bairro_pipeline.main
-	docker-compose run --rm etl python -m src.jobs.education_jobs.municipio_pipeline.main
+	docker compose run --rm etl python -m src.jobs.education_jobs.geo_ingest_pipeline.main
+	docker compose run --rm etl python -m src.jobs.education_jobs.bairro_pipeline.main
+	docker compose run --rm etl python -m src.jobs.education_jobs.municipio_pipeline.main
 
 run-setor: ## Aggregate indicators by census sector -> MongoDB setor_indicadores
-	docker-compose run --rm etl python -m src.jobs.education_jobs.setor_pipeline.main
+	docker compose run --rm etl python -m src.jobs.education_jobs.setor_pipeline.main
 
 run-education: ## Run the full education job (all pipelines end-to-end)
-	docker-compose run --rm etl python -m src.jobs.education_jobs.main
+	docker compose run --rm etl python -m src.jobs.education_jobs.main
 
 docs-to-pdf-socioeconomico: ## Convert socioeconomic module docs to PDF
 	@echo "🔄 Converting markdown files to PDF..."
@@ -112,28 +117,66 @@ help: ## Show this help message
 # ============================================================
 
 run-socioeconomico-extract: ## Run IBGE Censo 2022 extract (download datasets)
-	docker-compose run --rm etl python -m src.jobs.socioeconomico_jobs.ibge_censo_pipeline.etl.extract
+	docker compose run --rm etl python -m src.jobs.socioeconomico_jobs.ibge_censo_pipeline.etl.extract
 
 run-socioeconomico-transform-municipio: ## Run transform for municipality level
-	docker-compose run --rm etl python -m src.jobs.socioeconomico_jobs.ibge_censo_pipeline.etl.municipio.transform
+	docker compose run --rm etl python -m src.jobs.socioeconomico_jobs.ibge_censo_pipeline.etl.municipio.transform
 
 run-socioeconomico-load-municipio: ## Run load for municipality level to MongoDB
-	docker-compose run --rm etl python -m src.jobs.socioeconomico_jobs.ibge_censo_pipeline.etl.municipio.load
+	docker compose run --rm etl python -m src.jobs.socioeconomico_jobs.ibge_censo_pipeline.etl.municipio.load
 
 run-socioeconomico-transform-setor: ## Run transform for census sector level
-	docker-compose run --rm etl python -m src.jobs.socioeconomico_jobs.ibge_censo_pipeline.etl.setor.transform
+	docker compose run --rm etl python -m src.jobs.socioeconomico_jobs.ibge_censo_pipeline.etl.setor.transform
 
 run-socioeconomico-load-setor: ## Run load for census sector level to MongoDB
-	docker-compose run --rm etl python -m src.jobs.socioeconomico_jobs.ibge_censo_pipeline.etl.setor.load
+	docker compose run --rm etl python -m src.jobs.socioeconomico_jobs.ibge_censo_pipeline.etl.setor.load
 
 run-socioeconomico-transform-bairro: ## Run transform for neighborhood level
-	docker-compose run --rm etl python -m src.jobs.socioeconomico_jobs.ibge_censo_pipeline.etl.bairro.transform
+	docker compose run --rm etl python -m src.jobs.socioeconomico_jobs.ibge_censo_pipeline.etl.bairro.transform
 
 run-socioeconomico-load-bairro: ## Run load for neighborhood level to MongoDB
-	docker-compose run --rm etl python -m src.jobs.socioeconomico_jobs.ibge_censo_pipeline.etl.bairro.load
+	docker compose run --rm etl python -m src.jobs.socioeconomico_jobs.ibge_censo_pipeline.etl.bairro.load
 
 run-socioeconomico: ## Run the full socioeconomic module (all pipelines)
-	docker-compose run --rm etl python -m src.jobs.socioeconomico_jobs.main
+	docker compose run --rm etl python -m src.jobs.socioeconomico_jobs.main
 
 validar-socioeconomico: ## Validate socioeconomic module (files, MongoDB, data quality)
-	docker-compose run --rm etl python scripts/validar_socioeconomico.py
+	docker compose run --rm etl python scripts/validar_socioeconomico.py
+
+# ============================================================
+# Produção (usa docker-compose.prod.yml)
+# ============================================================
+
+PROD_COMPOSE = docker compose -f docker-compose.prod.yml
+
+prod-up: ## Start MongoDB in production mode
+	$(PROD_COMPOSE) up -d mongo
+
+prod-down: ## Stop all production containers
+	$(PROD_COMPOSE) down
+
+prod-logs: ## Tail production logs
+	$(PROD_COMPOSE) logs -f
+
+prod-status: ## Show production containers status
+	$(PROD_COMPOSE) ps
+
+prod-deploy: ## Full deploy (build + start) on server
+	./scripts/deploy.sh
+
+prod-shell: ## Open shell in production ETL container
+	$(PROD_COMPOSE) run --rm etl bash
+
+prod-run-education: ## Run education pipeline in production
+	$(PROD_COMPOSE) run --rm etl python -m src.jobs.education_jobs.main
+
+prod-run-socioeconomico: ## Run socioeconomic pipeline in production
+	$(PROD_COMPOSE) run --rm etl python -m src.jobs.socioeconomico_jobs.main
+
+prod-validar: ## Validate socioeconomic data in production
+	$(PROD_COMPOSE) run --rm etl python scripts/validar_socioeconomico.py
+
+prod-mongo-ui: ## Start Mongo Express UI (access via SSH tunnel on port 8081)
+	$(PROD_COMPOSE) --profile tools up -d mongo-express
+	@echo "Acesse via SSH tunnel: ssh -L 8081:localhost:8081 usuario@servidor"
+	@echo "Depois abra: http://localhost:8081"

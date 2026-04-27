@@ -1,23 +1,53 @@
-version: "3.8"
+# =============================================================
+# ODIN-ETL — Docker Compose (desenvolvimento local)
+#
+# Uso:
+#   docker compose up -d          # sobe o MongoDB
+#   docker compose run --rm etl make run-socioeconomico
+#   docker compose down
+#
+# NÃO usar em produção — use docker-compose.prod.yml
+# =============================================================
 
 services:
-  db:
+
+  mongo:
     image: mongo:7.0
+    container_name: odin-mongo-dev
     ports:
-      - "27017:27017" 
+      - "27017:27017"
     volumes:
-      - mongo_data:/data/db
+      - mongo_data_dev:/data/db
+    environment:
+      TZ: America/Recife
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   etl:
-    build: . 
+    build:
+      context: .
+      target: runtime
+    container_name: odin-etl-dev
     volumes:
+      # Bind mounts para hot reload em desenvolvimento
       - ./src:/app/src
       - ./config:/app/config
+      - ./scripts:/app/scripts
+      # Volume de dados persistente
+      - ./data:/app/data
     env_file:
-      - .env 
+      - .env
+    environment:
+      MONGO_URI: mongodb://mongo:27017
+      TZ: America/Recife
     depends_on:
-      - db 
-    command: ["/bin/sh", "-c", "echo 'ETL service is idle. Replace this command with your ETL process.' && sleep infinity"]
+      mongo:
+        condition: service_healthy
+    command: ["tail", "-f", "/dev/null"]
 
 volumes:
-  mongo_data:
+  mongo_data_dev:
