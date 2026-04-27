@@ -1,0 +1,134 @@
+# =============================================================
+# ODIN-ETL — Docker Compose (produção)
+#
+# Uso no servidor:
+#   docker compose -f docker-compose.prod.yml up -d
+#   docker compose -f docker-compose.prod.yml run --rm etl make run-socioeconomico
+#
+# Antes do primeiro deploy:
+#   1. Copie .env.example para .env.prod e preencha os valores
+#   2. Crie o arquivo de senha do MongoDB:
+#      echo "senha_forte_aqui" > /opt/odin/secrets/mongo_password.txt
+#      chmod 600 /opt/odin/secrets/mongo_password.txt
+# =============================================================
+
+services:
+
+  # ── MongoDB ────────────────────────────────────────────────
+  mongo:
+    image: mongo:7.0
+    container_name: odin-mongo
+    restart: unless-stopped
+    ports:
+      # Expõe apenas para localhost — não abre para a internet
+      - "127.0.0.1:27017:27017"
+    volumes:
+      # Volume nomeado — mais rápido que bind mount, gerenciado pelo Docker
+      - mongo_data:/data/db
+      # Script de inicialização: cria usuário e banco na primeira execução
+      - ./infra/mongo/init:/docker-entrypoint-initdb.d:ro
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: odin_admin
+      MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/mongo_password
+      MONGO_INITDB_DATABASE: odin
+      TZ: America/Recife
+    secrets:
+      - mongo_password
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')", "--quiet"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    # Limites de recursos — ajuste conforme o servidor
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # ── ETL ────────────────────────────────────────────────────
+  etl:
+    build:
+      context: .
+      target: runtime
+      # Cache de build para deploys mais rápidos
+      cache_from:
+        - odin-etl:latest
+    image: odin-etl:latest
+    container_name: odin-etl
+    restart: "no"  # ETL é batch — não reinicia automaticamente
+    volumes:
+      # Dados persistentes em volume nomeado (mais rápido que bind mount)
+      - etl_data:/app/data
+    env_file:
+      - .env.prod
+    environment:
+      # Sobrescreve o MONGO_URI do .env.prod para usar o container interno
+      MONGO_URI: mongodb://odin_user:${MONGO_PASSWORD}@mongo:27017/odin?authSource=odin
+      TZ: America/Recife
+      LOG_LEVEL: INFO
+    secrets:
+      - mongo_password
+    depends_on:
+      mongo:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: "2.0"
+        reservations:
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "10"
+
+  # ── Mongo Express (UI web — opcional, só internamente) ─────
+  mongo-express:
+    image: mongo-express:1.0
+    container_name: odin-mongo-express
+    restart: unless-stopped
+    ports:
+      # Só acessível via localhost — use SSH tunnel para acessar remotamente
+      # ssh -L 8081:localhost:8081 usuario@servidor
+      - "127.0.0.1:8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: odin_admin
+      ME_CONFIG_MONGODB_ADMINPASSWORD_FILE: /run/secrets/mongo_password
+      ME_CONFIG_MONGODB_URL: mongodb://odin_admin:${MONGO_ADMIN_PASSWORD}@mongo:27017/
+      ME_CONFIG_BASICAUTH_USERNAME: odin
+      ME_CONFIG_BASICAUTH_PASSWORD_FILE: /run/secrets/mongo_password
+      TZ: America/Recife
+    secrets:
+      - mongo_password
+    depends_on:
+      mongo:
+        condition: service_healthy
+    profiles:
+      # Só sobe se explicitamente pedido:
+      # docker compose -f docker-compose.prod.yml --profile tools up -d
+      - tools
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  mongo_data:
+    driver: local
+  etl_data:
+    driver: local
+
+secrets:
+  mongo_password:
+    file: ./secrets/mongo_password.txt

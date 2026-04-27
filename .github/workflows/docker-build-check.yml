@@ -16,9 +16,25 @@ jobs:
             - name: 2. Configurar o Docker Buildx
               uses: docker/setup-buildx-action@v3
 
-            - name: 3. Construir a imagem Docker para validar
+            - name: 3. Construir imagem (multi-stage, target runtime)
               uses: docker/build-push-action@v5
               with:
                   context: .
+                  target: runtime
                   push: false
-                  load: false
+                  load: true
+                  tags: odin-etl:ci
+                  cache-from: type=gha
+                  cache-to: type=gha,mode=max
+
+            - name: 4. Smoke test — verifica imports principais
+              run: |
+                  docker run --rm odin-etl:ci python -c "
+                  import geopandas
+                  import pandas
+                  import pymongo
+                  import shapely
+                  import src.jobs.education_jobs
+                  import src.jobs.socioeconomico_jobs
+                  print('OK — todos os imports funcionando')
+                  "

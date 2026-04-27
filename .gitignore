@@ -113,10 +113,14 @@ spark-warehouse/
 
 # Variáveis de ambiente e segredos
 .env
+.env.prod
+.env.staging
 .env.
 *.env
 .secrets/
-secrets/
+secrets/*.txt
+secrets/*.key
+secrets/*.pem
 *.secret
 *.secrets
 *.key
