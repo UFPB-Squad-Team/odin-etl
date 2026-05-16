@@ -39,7 +39,7 @@ def _download_file(url: str, dest_path: str, storage: StorageBackend) -> None:
         return
 
     logging.info(f"Downloading: {url}")
-    # Note: verify=False disables SSL verification; acceptable for MVP but should use verify=True in production
+    # Note: verify=False disables SSL verification; should use verify=True in production
     response = requests.get(url, timeout=120, verify=False)
     if response.status_code != 200:
         raise requests.HTTPError(

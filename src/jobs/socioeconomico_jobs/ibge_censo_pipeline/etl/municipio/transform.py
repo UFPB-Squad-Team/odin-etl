@@ -134,6 +134,7 @@ def _calcular_todos_indicadores(datasets: Dict[str, pd.DataFrame]) -> pd.DataFra
     """
     logger.info("Calculando indicadores...")
 
+    # Prioridade 1
     ind_populacao  = indicadores.calcular_populacao(datasets["basico"])
     ind_etaria     = indicadores.calcular_estrutura_etaria(datasets["demografia"])
     ind_raca       = indicadores.calcular_raca(datasets["cor_raca"])
@@ -141,8 +142,19 @@ def _calcular_todos_indicadores(datasets: Dict[str, pd.DataFrame]) -> pd.DataFra
     ind_alfa       = indicadores.calcular_alfabetizacao(datasets["alfabetizacao"])
     ind_familia    = indicadores.calcular_familia(datasets["parentesco"])
 
+    # Prioridade 2
+    ind_agua_inad    = indicadores.calcular_agua_inadequada(datasets["dom2"], datasets["basico"])
+    ind_esgoto_inad  = indicadores.calcular_esgoto_inadequado(datasets["dom2"], datasets["basico"])
+    ind_lixo_inad    = indicadores.calcular_lixo_inadequado(datasets["dom2"], datasets["basico"])
+    ind_dep          = indicadores.calcular_razao_dependencia(datasets["demografia"])
+    ind_obitos       = indicadores.calcular_obitos(datasets["obitos"])
+    ind_habitacao    = indicadores.calcular_habitacao(datasets["dom1"])
+
     df = ind_populacao
-    for parcial in [ind_etaria, ind_raca, ind_saneamento, ind_alfa, ind_familia]:
+    for parcial in [
+        ind_etaria, ind_raca, ind_saneamento, ind_alfa, ind_familia,
+        ind_agua_inad, ind_esgoto_inad, ind_lixo_inad, ind_dep, ind_obitos, ind_habitacao,
+    ]:
         df = df.merge(parcial, on="CD_MUN", how="outer")
 
     df = df.drop(columns=[_COLUNA_AUXILIAR_SANEAMENTO], errors="ignore")
@@ -342,7 +354,7 @@ def _logar_resumo(df: pd.DataFrame, pop_total: float, avisos: List[str]) -> None
     logger.info("TRANSFORM CONCLUÍDO")
     logger.info("  Municípios : %d", len(df))
     logger.info("  Colunas    : %d", len(df.columns))
-    logger.info("  Pop total  : %,.0f", pop_total)
+    logger.info("  Pop total  : %s", f"{pop_total:,.0f}")
     logger.info("  Avisos     : %d", len(avisos))
     logger.info("  Output     : %s", GOLD_OUTPUT)
     logger.info("=" * 60)

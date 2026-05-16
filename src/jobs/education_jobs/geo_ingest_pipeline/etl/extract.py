@@ -45,8 +45,7 @@ def _processar_shapefile_local(
 
     Path(silver_parquet_path).parent.mkdir(parents=True, exist_ok=True)
 
-    # Salvar como GeoPackage — mais compatível que GeoParquet
-    # (GeoParquet requer GDAL com driver Parquet compilado)
+    # Salvar como GeoPackage
     gpkg_path = silver_parquet_path.replace(".parquet", ".gpkg")
     gdf.to_file(gpkg_path, driver="GPKG")
     logging.info(f"GeoPackage salvo em Silver: {gpkg_path}")
@@ -91,17 +90,17 @@ def run(storage: StorageBackend = None) -> None:
     paths = config["paths"]
     ibge = config["geo_pipeline"]["ibge"]
 
-    # 1. Malha de Bairros — arquivo local (já baixado manualmente)
+    # 1. Malha de Bairros — arquivo local
     bairros_shp = str(Path(BAIRROS_SHP_DIR) / BAIRROS_SHP_FILE)
     bairros_silver = str(Path(paths["silver"]) / ibge["bairros_silver_output"])
     _processar_shapefile_local(bairros_shp, bairros_silver)
 
-    # 2. Malha de Setores Censitários — arquivo local (já baixado manualmente)
+    # 2. Malha de Setores Censitários — arquivo local
     setores_shp = "data/bronze/PB_setores_CD2022/PB_setores_CD2022.shp"
     setores_silver = str(Path(paths["silver"]) / ibge.get("setores_silver_output", "setores_pb.gpkg"))
     _processar_shapefile_local(setores_shp, setores_silver)
 
-    # 3. Malha Municipal — download do IBGE (opcional)
+    # 3. Malha Municipal — download do IBGE
     municipios_silver = str(Path(paths["silver"]) / ibge["municipios_silver_output"])
     if not Path(municipios_silver).exists():
         try:

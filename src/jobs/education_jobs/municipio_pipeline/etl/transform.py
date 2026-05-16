@@ -86,7 +86,7 @@ def run(storage: StorageBackend = None) -> pd.DataFrame:
     geocode_cfg = config["geocode_pipeline"]["transform"]
     cep_path = config.get("cep_pipeline", {}).get("cep_path", "data/gold/cep.json")
 
-    # 1. Carregar escolas — usar Silver do geocode extract (tem CO_CEP)
+    # 1. Carregar escolas
     escolas_path = str(Path(paths["gold"]) / geocode_cfg["gold_output"])
     df_gold = storage.read_parquet(escolas_path)
 
@@ -97,7 +97,7 @@ def run(storage: StorageBackend = None) -> pd.DataFrame:
     else:
         df_escolas = df_gold
 
-    # Extrair IDEB do Gold geocodificado e adicionar como colunas planas
+    # Extrair IDEB do Gold geocodificado
     if "documento" in df_gold.columns:
         ideb_rows = []
         for _, row in df_gold.iterrows():

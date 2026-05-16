@@ -30,7 +30,6 @@ def run():
     steps = [
         ("extract", lambda: extract.run(storage=storage)),
         ("transform", lambda: transform.run(storage=storage)),
-        # ("load", lambda: load.run(storage=storage)),  # Uncomment when MongoDB is available
     ]
 
     for step_name, step_fn in steps:

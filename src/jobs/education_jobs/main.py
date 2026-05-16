@@ -3,7 +3,7 @@ from datetime import datetime
 
 from src.jobs.education_jobs.censo_pipeline.main import run_pipeline as run_censo
 from src.jobs.education_jobs.geocode_pipeline.main import run as run_geocode
-from src.jobs.education_jobs.inep_indicadores_pipeline.main import run as run_indicadores  # substituiu Base dos Dados
+from src.jobs.education_jobs.inep_indicadores_pipeline.main import run as run_indicadores
 from src.jobs.education_jobs.geo_ingest_pipeline.main import run as run_geo_ingest
 from src.jobs.education_jobs.bairro_pipeline.main import run as run_bairro
 from src.jobs.education_jobs.municipio_pipeline.main import run as run_municipio
@@ -22,11 +22,10 @@ def run():
         ("censo_pipeline", run_censo),
         ("indicadores_pipeline", run_indicadores),
         ("geocode_pipeline", run_geocode),
-        ("geo_ingest_pipeline", run_geo_ingest),  # processa shapefile de bairros e setores IBGE
-        ("bairro_pipeline", run_bairro),           # agrega por bairro via spatial join
-        ("municipio_pipeline", run_municipio),     # agrega por município via CEP
-        ("setor_pipeline", run_setor),             # agrega por setor censitário (cobertura total PB)
-        # ("inep_resultados_pipeline", run_inep),  # URLs INEP pendentes de verificação
+        ("geo_ingest_pipeline", run_geo_ingest),
+        ("bairro_pipeline", run_bairro),
+        ("municipio_pipeline", run_municipio),
+        ("setor_pipeline", run_setor),
     ]
 
     for nome, pipeline_fn in pipelines:

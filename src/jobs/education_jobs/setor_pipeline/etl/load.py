@@ -18,15 +18,31 @@ _CAMPOS_ROOT = {
 }
 
 _CAMPOS_EDUCACAO = {
-    "total_escolas": "totalEscolas",
-    "total_matriculas": "totalMatriculas",
-    "pct_com_internet": "pctComInternet",
-    "pct_com_biblioteca": "pctComBiblioteca",
-    "pct_com_lab_informatica": "pctComLabInformatica",
-    "pct_sem_acessibilidade": "pctSemAcessibilidade",
-    "media_ideb_anos_iniciais": "mediaIdebAnosIniciais",
-    "media_ideb_anos_finais": "mediaIdebAnosFinals",
-    "media_inse": "mediaInse",
+    # Totais
+    "total_escolas":                    "totalEscolas",
+    "total_matriculas":                 "totalMatriculas",
+    # Infraestrutura básica
+    "pct_com_agua_potavel":             "pctComAguaPotavel",
+    "pct_com_energia_publica":          "pctComEnergiaPublica",
+    "pct_com_esgoto_rede_publica":      "pctComEsgotoRedePublica",
+    "pct_com_coleta_lixo":              "pctComColetaLixo",
+    # Infraestrutura pedagógica
+    "pct_com_internet":                 "pctComInternet",
+    "pct_com_internet_alunos":          "pctComInternetAlunos",
+    "pct_com_biblioteca":               "pctComBiblioteca",
+    "pct_com_laboratorio_informatica":  "pctComLaboratorioInformatica",
+    "pct_com_laboratorio_ciencias":     "pctComLaboratorioCiencias",
+    "pct_com_quadra_esportes":          "pctComQuadraEsportes",
+    "pct_com_cozinha":                  "pctComCozinha",
+    "pct_com_refeitorio":               "pctComRefeitorio",
+    # Acessibilidade
+    "pct_sem_acessibilidade":           "pctSemAcessibilidade",
+    # IDEB 2023
+    "media_ideb_anos_iniciais":         "mediaIdebAnosIniciais",
+    "media_ideb_anos_finais":           "mediaIdebAnosFinals",
+    "media_ideb_ensino_medio":          "mediaIdebEnsinoMedio",
+    # INSE
+    "media_inse":                       "mediaInse",
 }
 
 

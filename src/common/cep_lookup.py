@@ -23,15 +23,12 @@ def carregar_cep(cep_path: str) -> pd.DataFrame:
     logger.info(f"Carregando dataset de CEPs de: {cep_path}")
     df_cep = pd.read_json(cep_path)
 
-    # Garantir que CEP é string com zeros à esquerda (8 dígitos)
     df_cep["cep"] = df_cep["cep"].astype(str).str.zfill(8)
 
-    # Selecionar apenas colunas necessárias
     colunas = ["cep", "bairro", "municipio", "id_mundv", "sg_uf", "latitude", "longitude"]
     colunas_disponiveis = [c for c in colunas if c in df_cep.columns]
     df_cep = df_cep[colunas_disponiveis].copy()
 
-    # Remover duplicatas de CEP — manter o primeiro registro
     df_cep = df_cep.drop_duplicates(subset=["cep"], keep="first")
 
     logger.info(f"Dataset de CEPs carregado: {len(df_cep)} CEPs únicos.")
@@ -53,8 +50,6 @@ def enriquecer_com_cep(df_escolas: pd.DataFrame, cep_path: str) -> pd.DataFrame:
             bairro_cep, municipio_cep, id_mundv_cep,
             lat_cep, lon_cep
     """
-    df_cep = carregar_cep(cep_path)
-
     # Normalizar CO_CEP para string com 8 dígitos
     df = df_escolas.copy()
     df["_cep_join"] = (

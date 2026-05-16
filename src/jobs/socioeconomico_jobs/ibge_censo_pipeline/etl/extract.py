@@ -162,21 +162,32 @@ def _ler_csv_do_zip(zip_path: Path) -> pd.DataFrame:
             )
 
 
-_COLUNAS_UF_PRIORIDADE = ["CD_UF", "CD_MUN", "CD_SETOR"]
+_COLUNAS_UF_PRIORIDADE = ["CD_UF", "CD_MUN", "CD_SETOR", "CD_BAIRRO", "setor"]
+
+
+def _coluna_case_insensitive(df: pd.DataFrame, nome: str) -> str | None:
+    """Retorna o nome real da coluna no DataFrame, ignorando maiúsculas/minúsculas."""
+    nome_upper = nome.upper()
+    for col in df.columns:
+        if col.upper() == nome_upper:
+            return col
+    return None
 
 
 def _filtrar_uf(df: pd.DataFrame, dataset: str, granularidade: str) -> pd.DataFrame:
     """
     Filtra o DataFrame para a UF configurada em FILTRO_UF.
 
-    Tenta as colunas CD_UF → CD_MUN → CD_SETOR nessa ordem.
+    Tenta as colunas CD_UF → CD_MUN → CD_SETOR → setor nessa ordem,
+    com busca case-insensitive (o IBGE usa casing inconsistente entre datasets).
     CD_UF faz match exato; as demais usam startswith (prefixo de 2 dígitos).
     """
-    for coluna in _COLUNAS_UF_PRIORIDADE:
-        if coluna not in df.columns:
+    for nome_coluna in _COLUNAS_UF_PRIORIDADE:
+        coluna = _coluna_case_insensitive(df, nome_coluna)
+        if coluna is None:
             continue
 
-        if coluna == "CD_UF":
+        if nome_coluna == "CD_UF":
             filtrado = df[df[coluna] == FILTRO_UF].copy()
         else:
             filtrado = df[df[coluna].str.startswith(FILTRO_UF)].copy()

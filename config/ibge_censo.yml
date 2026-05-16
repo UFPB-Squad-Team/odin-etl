@@ -39,7 +39,8 @@ datasets:
   - basico                       # população total, domicílios (V0001..V0007)
   - demografia                   # estrutura etária por sexo (V01006..V01041)
   - cor_ou_raca                  # distribuição racial (V01317..V01321)
-  - caracteristicas_domicilio2   # água, esgoto e lixo (V00111, V00309, V00397, V00398)
+  - caracteristicas_domicilio1   # tipo de domicílio, superlotação, improvisados (V00001..V00089)
+  - caracteristicas_domicilio2   # água, esgoto e lixo (V00111, V00309, V00397..V00402)
   - caracteristicas_domicilio3   # outros dados de domicílio
   - alfabetizacao                # alfabetização por faixa etária (V00748..V00760, V00901)
   - obitos                       # óbitos domiciliares 2019-2022 (V01224...)
@@ -76,8 +77,10 @@ transform_municipio:
     demografia:   "ibge_censo2022_municipio_demografia_pb.parquet"
     cor_raca:     "ibge_censo2022_municipio_cor_ou_raca_pb.parquet"
     dom2:         "ibge_censo2022_municipio_caracteristicas_domicilio2_pb.parquet"
-    alfabetizacao:"ibge_censo2022_municipio_alfabetizacao_pb.parquet"
+    dom1:         "ibge_censo2022_municipio_caracteristicas_domicilio1_pb.parquet"
+    alfabetizacao: "ibge_censo2022_municipio_alfabetizacao_pb.parquet"
     parentesco:   "ibge_censo2022_municipio_parentesco_pb.parquet"
+    obitos:       "ibge_censo2022_municipio_obitos_pb.parquet"
 
   gold_output: "municipio_socioeconomico_pb.parquet"
 
@@ -88,7 +91,6 @@ transform_municipio:
   # v0001 conta domicílios particulares — diferença de ~85k para o oficial é esperada.
   pop_total_min: 3_800_000
   pop_total_max: 4_200_000
-
   # Contratos de qualidade derivados da EDA estatística.
   # Ranges validados contra dados oficiais do IBGE.
   # Se um valor sair do range, o dado está errado — não o range.

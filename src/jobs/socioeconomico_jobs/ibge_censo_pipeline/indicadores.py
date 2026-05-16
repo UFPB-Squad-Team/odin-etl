@@ -15,18 +15,46 @@ def _chave_geografica(df: pd.DataFrame) -> str:
     Detecta automaticamente a coluna de chave geográfica do DataFrame.
 
     Ordem de prioridade: CD_SETOR > CD_BAIRRO > CD_MUN.
-    Isso garante que a mesma função funciona para setor, bairro e município.
+    Busca case-insensitive e reconhece aliases do IBGE (ex: 'setor' = 'CD_SETOR').
 
     Raises:
         ValueError: se nenhuma chave conhecida for encontrada.
     """
-    for col in ("CD_SETOR", "CD_BAIRRO", "CD_MUN"):
-        if col in df.columns:
-            return col
+    # Mapa: nome canônico → aliases aceitos (todos em uppercase para comparação)
+    _ALIASES = {
+        "CD_SETOR": {"CD_SETOR", "SETOR"},
+        "CD_BAIRRO": {"CD_BAIRRO", "BAIRRO"},
+        "CD_MUN":   {"CD_MUN", "MUN"},
+    }
+    colunas_upper = {col.upper(): col for col in df.columns}
+    for chave_canonica, aliases in _ALIASES.items():
+        for alias in aliases:
+            if alias in colunas_upper:
+                return colunas_upper[alias]
     raise ValueError(
         f"Nenhuma chave geográfica encontrada. Esperado: CD_SETOR, CD_BAIRRO ou CD_MUN. "
         f"Colunas disponíveis: {list(df.columns[:10])}"
     )
+
+
+# Mapa de aliases → nome canônico (para normalização)
+_ALIAS_PARA_CANONICO = {
+    "setor": "CD_SETOR",
+    "bairro": "CD_BAIRRO",
+    "mun": "CD_MUN",
+}
+
+
+def _normalizar_chave(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Renomeia a coluna de chave geográfica para o nome canônico (CD_SETOR, CD_BAIRRO, CD_MUN).
+    Necessário porque o IBGE usa nomes inconsistentes entre datasets (ex: 'setor' vs 'CD_SETOR').
+    """
+    chave_atual = _chave_geografica(df)
+    canonico = _ALIAS_PARA_CANONICO.get(chave_atual.lower(), chave_atual.upper())
+    if chave_atual != canonico and canonico not in df.columns:
+        return df.rename(columns={chave_atual: canonico})
+    return df
 
 
 def _to_num(df: pd.DataFrame, colunas: List[str]) -> pd.DataFrame:
@@ -104,6 +132,7 @@ def calcular_populacao(df_basico: pd.DataFrame) -> pd.DataFrame:
         DataFrame com [chave_geografica, total_populacao,
                        total_domicilios_particulares, media_moradores_por_domicilio]
     """
+    df_basico = _normalizar_chave(df_basico)
     chave = _chave_geografica(df_basico)
     df = _to_num(df_basico, ["v0001", "v0003", "v0005"])
 
@@ -155,9 +184,8 @@ def calcular_estrutura_etaria(df_demografia: pd.DataFrame) -> pd.DataFrame:
     Returns:
         DataFrame com [chave_geografica, pct_criancas_0_9, pct_idosos_60_mais]
     """
+    df_demografia = _normalizar_chave(df_demografia)
     chave = _chave_geografica(df_demografia)
-
-    # Usar as faixas TOTAIS (V01031..V01041) — masc+fem juntos
     # Confirmado no dicionário IBGE: V01031=0-4, V01032=5-9, V01040=60-69, V01041=70+
     cols_0_9 = ["V01031", "V01032"]   # 0-4 e 5-9 anos (total)
     cols_60p = ["V01040", "V01041"]   # 60-69 e 70+ anos (total)
@@ -209,6 +237,7 @@ def calcular_raca(df_cor_raca: pd.DataFrame) -> pd.DataFrame:
     Returns:
         DataFrame com [chave_geografica, pct_preta_parda]
     """
+    df_cor_raca = _normalizar_chave(df_cor_raca)
     chave = _chave_geografica(df_cor_raca)
 
     cols = ["V01317", "V01318", "V01319", "V01320", "V01321"]
@@ -268,18 +297,22 @@ def calcular_saneamento(
         DataFrame com [chave_geografica, pct_agua_rede_geral,
                        pct_esgoto_rede_geral, pct_lixo_coletado]
     """
-    chave = _chave_geografica(df_domicilio2)
+    df_domicilio2 = _normalizar_chave(df_domicilio2)
+    df_basico     = _normalizar_chave(df_basico)
+    chave_dom2   = _chave_geografica(df_domicilio2)
+    chave_basico = _chave_geografica(df_basico)
 
     df2 = _to_num(df_domicilio2, ["V00111", "V00309", "V00397", "V00398"])
     dfb = _to_num(df_basico, ["v0003"])
 
-    denominador = df2[[chave]].merge(
-        dfb[[chave, "v0003"]],
-        on=chave,
+    # Agora ambos têm nomes canônicos — merge direto pela chave comum
+    denominador = df2[[chave_dom2]].merge(
+        dfb[[chave_basico, "v0003"]].rename(columns={chave_basico: chave_dom2}),
+        on=chave_dom2,
         how="left",
     )["v0003"]
 
-    resultado = df2[[chave]].copy()
+    resultado = df2[[chave_dom2]].copy()
     resultado["pct_agua_rede_geral"]   = _pct(df2["V00111"], denominador)
     resultado["pct_esgoto_rede_geral"] = _pct(df2["V00309"], denominador)
     resultado["pct_lixo_coletado"]     = _pct(df2["V00397"] + df2["V00398"], denominador)
@@ -320,9 +353,8 @@ def calcular_alfabetizacao(df_alfabetizacao: pd.DataFrame) -> pd.DataFrame:
     Returns:
         DataFrame com [chave_geografica, taxa_analfabetismo_15_mais]
     """
+    df_alfabetizacao = _normalizar_chave(df_alfabetizacao)
     chave = _chave_geografica(df_alfabetizacao)
-
-    # Colunas de alfabetizados por faixa etária 15+ (V00748 a V00760)
     cols_alfa_15p = [f"V00{i}" for i in range(748, 761)]  # V00748..V00760
 
     todas = ["V00901"] + cols_alfa_15p
@@ -366,6 +398,7 @@ def calcular_familia(df_parentesco: pd.DataFrame) -> pd.DataFrame:
     Returns:
         DataFrame com [chave_geografica, pct_responsavel_feminino]
     """
+    df_parentesco = _normalizar_chave(df_parentesco)
     chave = _chave_geografica(df_parentesco)
 
     df = _to_num(df_parentesco, ["V01042", "V01063"])
@@ -376,5 +409,313 @@ def calcular_familia(df_parentesco: pd.DataFrame) -> pd.DataFrame:
     logger.info(
         f"calcular_familia: {len(resultado)} registros | "
         f"pct_responsavel_feminino média: {resultado['pct_responsavel_feminino'].mean():.1f}%"
+    )
+    return resultado
+
+
+# ---------------------------------------------------------------------------
+# Indicadores Prioridade 2 — Vulnerabilidade Hídrica e Sanitária
+# ---------------------------------------------------------------------------
+
+def calcular_agua_inadequada(
+    df_domicilio2: pd.DataFrame,
+    df_basico: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Calcula o percentual de domicílios com fonte de água inadequada.
+
+    "Inadequada" = qualquer fonte que não seja rede geral ou poço artesiano:
+    poço raso, fonte/nascente, carro-pipa, água de chuva, rio/açude, outra.
+
+    Fonte: datasets 'caracteristicas_domicilio2' + 'basico'
+
+    Mapeamento de variáveis:
+        V00113 — poço raso / cacimba / cisterna
+        V00114 — fonte / nascente / olho d'água
+        V00115 — carro-pipa
+        V00116 — água da chuva armazenada em cisterna
+        V00117 — rio, açude, lago ou igarapé
+        V00118 — outra forma
+        v0003  — total de domicílios particulares (denominador, do basico)
+
+    Indicadores:
+        pct_agua_inadequada — Σ(V00113..V00118) / v0003 × 100
+
+    EDA (município PB): média 21.8% | min 0.0% | max 73.7%
+    """
+    df_domicilio2 = _normalizar_chave(df_domicilio2)
+    df_basico     = _normalizar_chave(df_basico)
+    chave = _chave_geografica(df_domicilio2)
+    chave_b = _chave_geografica(df_basico)
+
+    cols_inad = ["V00113", "V00114", "V00115", "V00116", "V00117", "V00118"]
+    df2 = _to_num(df_domicilio2, cols_inad)
+    dfb = _to_num(df_basico, ["v0003"])
+
+    denominador = df2[[chave]].merge(
+        dfb[[chave_b, "v0003"]].rename(columns={chave_b: chave}),
+        on=chave, how="left",
+    )["v0003"]
+
+    agua_inad = df2[cols_inad].sum(axis=1)
+
+    resultado = df2[[chave]].copy()
+    resultado["pct_agua_inadequada"] = _pct(agua_inad, denominador)
+
+    logger.info(
+        "calcular_agua_inadequada: %d registros | média: %.1f%%",
+        len(resultado), resultado["pct_agua_inadequada"].mean(),
+    )
+    return resultado
+
+
+def calcular_esgoto_inadequado(
+    df_domicilio2: pd.DataFrame,
+    df_basico: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Calcula o percentual de domicílios com esgotamento sanitário inadequado.
+
+    "Inadequado" = fossa rudimentar, vala, rio/lago, outro ou sem banheiro.
+
+    Fonte: datasets 'caracteristicas_domicilio2' + 'basico'
+
+    Mapeamento de variáveis:
+        V00311 — fossa rudimentar / buraco
+        V00313 — vala a céu aberto
+        V00314 — rio, lago, mar ou outro corpo d'água
+        V00315 — outro escoadouro
+        V00316 — não tinham banheiro nem sanitário
+        v0003  — total de domicílios particulares (denominador)
+
+    Indicadores:
+        pct_esgoto_inadequado — Σ(V00311,V00313..V00316) / v0003 × 100
+
+    EDA (município PB): média 18.0% | min 0.7% | max 77.2%
+    """
+    df_domicilio2 = _normalizar_chave(df_domicilio2)
+    df_basico     = _normalizar_chave(df_basico)
+    chave = _chave_geografica(df_domicilio2)
+    chave_b = _chave_geografica(df_basico)
+
+    cols_inad = ["V00311", "V00313", "V00314", "V00315", "V00316"]
+    df2 = _to_num(df_domicilio2, cols_inad)
+    dfb = _to_num(df_basico, ["v0003"])
+
+    denominador = df2[[chave]].merge(
+        dfb[[chave_b, "v0003"]].rename(columns={chave_b: chave}),
+        on=chave, how="left",
+    )["v0003"]
+
+    esgoto_inad = df2[cols_inad].sum(axis=1)
+
+    resultado = df2[[chave]].copy()
+    resultado["pct_esgoto_inadequado"] = _pct(esgoto_inad, denominador)
+
+    logger.info(
+        "calcular_esgoto_inadequado: %d registros | média: %.1f%%",
+        len(resultado), resultado["pct_esgoto_inadequado"].mean(),
+    )
+    return resultado
+
+
+def calcular_lixo_inadequado(
+    df_domicilio2: pd.DataFrame,
+    df_basico: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Calcula o percentual de domicílios com destino inadequado do lixo.
+
+    "Inadequado" = queimado, enterrado, jogado em terreno baldio ou outro.
+
+    Fonte: datasets 'caracteristicas_domicilio2' + 'basico'
+    ⚠️ Apesar do nome, V00399-V00402 estão em domicilio2, não em domicilio3.
+
+    Mapeamento de variáveis:
+        V00399 — lixo queimado na propriedade
+        V00400 — lixo enterrado na propriedade
+        V00401 — lixo jogado em terreno baldio, encosta ou área pública
+        V00402 — outro destino do lixo
+        v0003  — total de domicílios particulares (denominador)
+
+    Indicadores:
+        pct_lixo_inadequado — Σ(V00399..V00402) / v0003 × 100
+
+    EDA (município PB): média 20.7% | min 0.5% | max 61.1%
+    """
+    df_domicilio2 = _normalizar_chave(df_domicilio2)
+    df_basico     = _normalizar_chave(df_basico)
+    chave = _chave_geografica(df_domicilio2)
+    chave_b = _chave_geografica(df_basico)
+
+    cols_inad = ["V00399", "V00400", "V00401", "V00402"]
+    df2 = _to_num(df_domicilio2, cols_inad)
+    dfb = _to_num(df_basico, ["v0003"])
+
+    denominador = df2[[chave]].merge(
+        dfb[[chave_b, "v0003"]].rename(columns={chave_b: chave}),
+        on=chave, how="left",
+    )["v0003"]
+
+    lixo_inad = df2[cols_inad].sum(axis=1)
+
+    resultado = df2[[chave]].copy()
+    resultado["pct_lixo_inadequado"] = _pct(lixo_inad, denominador)
+
+    logger.info(
+        "calcular_lixo_inadequado: %d registros | média: %.1f%%",
+        len(resultado), resultado["pct_lixo_inadequado"].mean(),
+    )
+    return resultado
+
+
+def calcular_razao_dependencia(df_demografia: pd.DataFrame) -> pd.DataFrame:
+    """
+    Calcula a razão de dependência demográfica.
+
+    Mede a proporção de pessoas em idade dependente (0-14 e 60+) em relação
+    à população em idade ativa (15-59). Valores altos indicam maior pressão
+    sobre a população economicamente ativa.
+
+    Fonte: dataset 'demografia'
+
+    Mapeamento de variáveis (faixas TOTAIS masc+fem):
+        V01031 — 0 a 4 anos
+        V01032 — 5 a 9 anos
+        V01033 — 10 a 14 anos
+        V01034 — 15 a 19 anos
+        V01035 — 20 a 24 anos
+        V01036 — 25 a 29 anos
+        V01037 — 30 a 39 anos
+        V01038 — 40 a 49 anos
+        V01039 — 50 a 59 anos
+        V01040 — 60 a 69 anos
+        V01041 — 70 anos ou mais
+
+    Indicadores:
+        razao_dependencia — (pop_0_14 + pop_60+) / pop_15_59 × 100
+
+    EDA (município PB): média 60.8 | min 48.8 | max 72.6
+    Interpretação: 60.8 = para cada 100 pessoas em idade ativa, há ~61 dependentes.
+    """
+    df_demografia = _normalizar_chave(df_demografia)
+    chave = _chave_geografica(df_demografia)
+
+    cols = ["V01031", "V01032", "V01033",
+            "V01034", "V01035", "V01036", "V01037", "V01038", "V01039",
+            "V01040", "V01041"]
+    df = _to_num(df_demografia, cols)
+
+    pop_0_14  = df[["V01031", "V01032", "V01033"]].sum(axis=1)
+    pop_15_59 = df[["V01034", "V01035", "V01036", "V01037", "V01038", "V01039"]].sum(axis=1)
+    pop_60p   = df[["V01040", "V01041"]].sum(axis=1)
+
+    resultado = df[[chave]].copy()
+    resultado["razao_dependencia"] = _pct(pop_0_14 + pop_60p, pop_15_59)
+
+    logger.info(
+        "calcular_razao_dependencia: %d registros | média: %.1f",
+        len(resultado), resultado["razao_dependencia"].mean(),
+    )
+    return resultado
+
+
+def calcular_obitos(df_obitos: pd.DataFrame) -> pd.DataFrame:
+    """
+    Calcula indicadores de mortalidade a partir dos óbitos domiciliares.
+
+    ⚠️ ATENÇÃO — interpretação correta:
+        V01224 conta DOMICÍLIOS que tiveram pelo menos um óbito entre jan/2019
+        e jul/2022, não o total de óbitos. É um proxy de mortalidade domiciliar,
+        não uma taxa de mortalidade oficial.
+
+    Fonte: dataset 'obitos'
+    Silver: ibge_censo2022_{granularidade}_obitos_pb.parquet
+
+    Mapeamento de variáveis:
+        V01224 — domicílios com pelo menos um óbito (jan/2019–jul/2022)
+        V01226 — óbitos masculinos
+        V01227 — óbitos femininos
+        V01228 — óbitos masculinos, 0 a 4 anos
+        V01239 — óbitos femininos, 0 a 4 anos
+
+    Indicadores:
+        total_obitos_domicilios — V01224 (domicílios com óbito)
+        obitos_infantis_0_4     — V01228 + V01239
+
+    EDA (município PB):
+        total_obitos_domicilios: média 364 | max 15.267 (João Pessoa)
+        obitos_infantis_0_4: valores baixos, proxy de mortalidade infantil
+
+    Args:
+        df_obitos: DataFrame do arquivo 'obitos'
+
+    Returns:
+        DataFrame com [chave_geografica, total_obitos_domicilios, obitos_infantis_0_4]
+    """
+    df_obitos = _normalizar_chave(df_obitos)
+    chave = _chave_geografica(df_obitos)
+
+    df = _to_num(df_obitos, ["V01224", "V01228", "V01239"])
+
+    resultado = df[[chave]].copy()
+    resultado["total_obitos_domicilios"] = df["V01224"].astype("Int64")
+    resultado["obitos_infantis_0_4"]     = (df["V01228"] + df["V01239"]).astype("Int64")
+
+    logger.info(
+        "calcular_obitos: %d registros | total_obitos_domicilios soma: %d",
+        len(resultado), resultado["total_obitos_domicilios"].sum(),
+    )
+    return resultado
+
+
+# ---------------------------------------------------------------------------
+# Indicadores Prioridade 2 — Habitação (fonte: caracteristicas_domicilio1)
+# ---------------------------------------------------------------------------
+
+def calcular_habitacao(df_domicilio1: pd.DataFrame) -> pd.DataFrame:
+    """
+    Calcula indicadores de condições habitacionais.
+
+    Fonte: dataset 'caracteristicas_domicilio1'
+    Silver: ibge_censo2022_{granularidade}_caracteristicas_domicilio1_pb.parquet
+
+    Mapeamento de variáveis:
+        V00001 — domicílios particulares permanentes ocupados (denominador)
+        V00002 — domicílios particulares improvisados ocupados
+        V00021 — dom. com 5 moradores
+        V00022 — dom. com 6 moradores
+        V00023 — dom. com 7 moradores
+        V00024 — dom. com 8 moradores
+        V00025 — dom. com 9 moradores
+        V00026 — dom. com 10 ou mais moradores
+
+    Indicadores:
+        pct_dom_improvisado — V00002 / V00001 × 100
+            Proxy de habitação precária (barracos, tendas, veículos, etc.)
+
+        pct_dom_superlotado — Σ(V00021..V00026) / V00001 × 100
+            Domicílios com 5 ou mais moradores — proxy de adensamento excessivo.
+            O IBGE considera 5+ moradores como indicador de superlotação.
+    """
+    df_domicilio1 = _normalizar_chave(df_domicilio1)
+    chave = _chave_geografica(df_domicilio1)
+
+    cols_superlot = ["V00021", "V00022", "V00023", "V00024", "V00025", "V00026"]
+    df = _to_num(df_domicilio1, ["V00001", "V00002"] + cols_superlot)
+
+    denominador  = df["V00001"]
+    improvisados = df["V00002"]
+    superlotados = df[cols_superlot].sum(axis=1)
+
+    resultado = df[[chave]].copy()
+    resultado["pct_dom_improvisado"] = _pct(improvisados, denominador)
+    resultado["pct_dom_superlotado"] = _pct(superlotados, denominador)
+
+    logger.info(
+        "calcular_habitacao: %d registros | improvisado: %.1f%% | superlotado: %.1f%%",
+        len(resultado),
+        resultado["pct_dom_improvisado"].mean(),
+        resultado["pct_dom_superlotado"].mean(),
     )
     return resultado

@@ -1,9 +1,3 @@
-"""
-Shared geospatial utilities for ODIN-ETL Pipelines 6 and 7.
-
-These functions are intentionally kept small and focused so that
-new developers can understand each one in isolation.
-"""
 import logging
 
 import geopandas as gpd
@@ -49,67 +43,108 @@ def calcular_indicadores(
     config: dict,
 ) -> pd.DataFrame:
     """
-    Aggregate educational metrics (Census + INEP) grouped by group_col.
+    Agrega indicadores educacionais por grupo geográfico (bairro, setor, município).
 
-    This function is agnostic to the aggregation level — pass
-    'id_setor' for neighborhood-level or 'co_municipio' for
-    municipality-level aggregation.
+    Agrega dois tipos de métricas:
+    1. Infraestrutura (Censo Escolar): percentual de escolas com cada recurso
+    2. Desempenho (INEP): médias de IDEB, TDI, taxas de rendimento por nível de ensino
 
-    Metrics aggregated:
-    - Census: matrículas, internet, biblioteca, lab informática, acessibilidade
-    - INEP: IDEB (anos iniciais/finais), INSE (nível socioeconômico)
+    O schema de saída é sempre uniforme — todos os campos presentes em todas as linhas,
+    com None onde não há dados. Isso é necessário para o pandas 3.x, que cria MultiIndex
+    quando grupos retornam Series com campos diferentes.
 
     Args:
-        df:        DataFrame with school records already joined to polygons.
-        group_col: Column name to group by (e.g. 'id_setor' or 'co_municipio').
-        config:    Dict from config_geocode.yml section 'colunas_metricas'.
+        df:        DataFrame com registros de escolas já associados a polígonos.
+        group_col: Coluna de agrupamento (ex: 'CD_BAIRRO', 'CD_SETOR', 'municipio_cep').
+        config:    Seção 'colunas_metricas' do config_geocode.yml.
 
     Returns:
-        DataFrame with one row per group and aggregated indicator columns.
+        DataFrame com uma linha por grupo e colunas de indicadores agregados.
     """
-    cols_matriculas = config["matriculas"]
-    col_internet = config["internet"]
-    col_biblioteca = config["biblioteca"]
-    col_lab = config["lab_informatica"]
-    col_sem_acess = config["sem_acessibilidade"]
+    colunas_matriculas = config["matriculas"]
+    coluna_internet = config["internet"]
+    coluna_biblioteca = config["biblioteca"]
+    coluna_laboratorio_informatica = config["lab_informatica"]
+    coluna_sem_acessibilidade = config["sem_acessibilidade"]
 
-    # Converter colunas numéricas para int, tratando valores ausentes como 0
-    for col in cols_matriculas + [col_internet, col_biblioteca, col_lab, col_sem_acess]:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(int)
+    # Converter colunas de infraestrutura para int (0/1), tratando ausentes como 0
+    colunas_infra = colunas_matriculas + [
+        coluna_internet, coluna_biblioteca,
+        coluna_laboratorio_informatica, coluna_sem_acessibilidade,
+    ]
+    colunas_infra_extras = [
+        "IN_AGUA_POTAVEL", "IN_ENERGIA_REDE_PUBLICA", "IN_ESGOTO_REDE_PUBLICA",
+        "IN_LIXO_SERVICO_COLETA", "IN_COZINHA", "IN_REFEITORIO",
+        "IN_QUADRA_ESPORTES", "IN_LABORATORIO_CIENCIAS",
+        "IN_INTERNET_ALUNOS", "IN_ACESSIBILIDADE_INEXISTENTE",
+    ]
+    for coluna in colunas_infra + colunas_infra_extras:
+        if coluna in df.columns:
+            df[coluna] = pd.to_numeric(df[coluna], errors="coerce").fillna(0).astype(int)
 
-    # Converter colunas INEP para float
-    inep_cols = ["ideb_anos_iniciais", "ideb_anos_finais", "inse_valor"]
-    for col in inep_cols:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
+    colunas_desempenho = [
+        "ideb_anos_iniciais", "ideb_anos_finais", "ideb_ensino_medio",
+        "inse_valor",
+    ]
+    for coluna in colunas_desempenho:
+        if coluna in df.columns:
+            df[coluna] = pd.to_numeric(df[coluna], errors="coerce")
 
-    def _agregar(grupo):
+    def _pct_escolas_com(grupo, coluna: str) -> float | None:
+        """Percentual de escolas onde a coluna booleana é 1 (True)."""
+        if coluna not in grupo.columns:
+            return None
         total = len(grupo)
-        agg_dict = {
-            "total_escolas": total,
-            "total_matriculas": int(grupo[cols_matriculas].sum().sum()),
-            "pct_com_internet": round((grupo[col_internet] == 1).sum() / total * 100, 1),
-            "pct_com_biblioteca": round((grupo[col_biblioteca] == 1).sum() / total * 100, 1),
-            "pct_com_lab_informatica": round((grupo[col_lab] == 1).sum() / total * 100, 1),
-            "pct_sem_acessibilidade": round((grupo[col_sem_acess] == 1).sum() / total * 100, 1),
-        }
-        # Agregar indicadores INEP (média)
-        if "ideb_anos_iniciais" in grupo.columns:
-            ideb_ai = grupo["ideb_anos_iniciais"].dropna()
-            if len(ideb_ai) > 0:
-                agg_dict["media_ideb_anos_iniciais"] = round(ideb_ai.mean(), 2)
-        if "ideb_anos_finais" in grupo.columns:
-            ideb_af = grupo["ideb_anos_finais"].dropna()
-            if len(ideb_af) > 0:
-                agg_dict["media_ideb_anos_finais"] = round(ideb_af.mean(), 2)
-        if "inse_valor" in grupo.columns:
-            inse = grupo["inse_valor"].dropna()
-            if len(inse) > 0:
-                agg_dict["media_inse"] = round(inse.mean(), 2)
-        return pd.Series(agg_dict)
+        if total == 0:
+            return None
+        return round((grupo[coluna] == 1).sum() / total * 100, 1)
 
-    return df.groupby(group_col).apply(_agregar).reset_index()
+    def _media_indicador(grupo, coluna: str) -> float | None:
+        """Média de um indicador numérico, ignorando nulos."""
+        if coluna not in grupo.columns:
+            return None
+        valores = grupo[coluna].dropna()
+        if len(valores) == 0:
+            return None
+        return round(float(valores.mean()), 2)
+
+    def _agregar_grupo(grupo):
+        total_escolas = len(grupo)
+
+        return pd.Series({
+            # ── Totais ────────────────────────────────────────────────────────
+            "total_escolas": total_escolas,
+            "total_matriculas": int(grupo[colunas_matriculas].sum().sum()),
+
+            # ── Infraestrutura básica ─────────────────────────────────────────
+            "pct_com_agua_potavel":          _pct_escolas_com(grupo, "IN_AGUA_POTAVEL"),
+            "pct_com_energia_publica":       _pct_escolas_com(grupo, "IN_ENERGIA_REDE_PUBLICA"),
+            "pct_com_esgoto_rede_publica":   _pct_escolas_com(grupo, "IN_ESGOTO_REDE_PUBLICA"),
+            "pct_com_coleta_lixo":           _pct_escolas_com(grupo, "IN_LIXO_SERVICO_COLETA"),
+
+            # ── Infraestrutura pedagógica ─────────────────────────────────────
+            "pct_com_internet":              _pct_escolas_com(grupo, coluna_internet),
+            "pct_com_internet_alunos":       _pct_escolas_com(grupo, "IN_INTERNET_ALUNOS"),
+            "pct_com_biblioteca":            _pct_escolas_com(grupo, coluna_biblioteca),
+            "pct_com_laboratorio_informatica": _pct_escolas_com(grupo, coluna_laboratorio_informatica),
+            "pct_com_laboratorio_ciencias":  _pct_escolas_com(grupo, "IN_LABORATORIO_CIENCIAS"),
+            "pct_com_quadra_esportes":       _pct_escolas_com(grupo, "IN_QUADRA_ESPORTES"),
+            "pct_com_cozinha":               _pct_escolas_com(grupo, "IN_COZINHA"),
+            "pct_com_refeitorio":            _pct_escolas_com(grupo, "IN_REFEITORIO"),
+
+            # ── Acessibilidade ────────────────────────────────────────────────
+            "pct_sem_acessibilidade":        _pct_escolas_com(grupo, coluna_sem_acessibilidade),
+
+            # ── IDEB 2023 ─────────────────────────────────────────────────────
+            "media_ideb_anos_iniciais":      _media_indicador(grupo, "ideb_anos_iniciais"),
+            "media_ideb_anos_finais":        _media_indicador(grupo, "ideb_anos_finais"),
+            "media_ideb_ensino_medio":       _media_indicador(grupo, "ideb_ensino_medio"),
+
+            # ── INSE ──────────────────────────────────────────────────────────
+            "media_inse":                    _media_indicador(grupo, "inse_valor"),
+        })
+
+    return df.groupby(group_col).apply(_agregar_grupo, include_groups=False).reset_index()
 
 
 def poligono_para_geojson(geometry) -> dict:

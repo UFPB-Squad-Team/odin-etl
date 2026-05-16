@@ -1,14 +1,3 @@
-"""
-Geocode Pipeline — Transform Step
-
-Reads the Silver parquet from extract and geocodes schools using:
-  1. **Existing geocoded dataset** (preferred): Merges by CO_ENTIDADE with
-     pre-geocoded data from previous full Google API runs (if available)
-  2. **Pluggable geocode_fn** (fallback): For addresses not in existing dataset,
-     uses the injected function (API or placeholder)
-
-This two-tier approach avoids redundant API calls while staying flexible.
-"""
 import logging
 from pathlib import Path
 from typing import Callable
@@ -133,23 +122,18 @@ def run(geocode_fn: GeocodeFunction, storage: StorageBackend = None):
     batch_size = transform_config.get("batch_size", 100)
     indicators_path = str(Path(paths["gold"]) / "indicadores_base_dos_dados.parquet")
 
-    # Path to pre-geocoded data (if available from previous runs)
+    # Path to pre-geocoded data
     existing_geocoded_path = "data/silver/escolas_nordeste_geocoded.parquet"
 
     logging.info(f"Reading Silver from: {input_path}")
     df_schools = storage.read_parquet(input_path)
     logging.info(f"Total schools to process: {len(df_schools)}")
 
-    # Ensure CO_ENTIDADE is string for merge
     df_schools["CO_ENTIDADE"] = df_schools["CO_ENTIDADE"].astype(str)
 
-    # ============================================================================
-    # TIER 1: Try to merge with existing geocoded dataset (from previous Google API runs)
-    # ============================================================================
     df_geocoded_existing = _load_existing_geocoded(existing_geocoded_path)
 
     if df_geocoded_existing is not None:
-        # Left merge: keep all schools, add coords where available
         df_schools = df_schools.merge(
             df_geocoded_existing[["CO_ENTIDADE", "latitude", "longitude"]],
             on="CO_ENTIDADE",
@@ -163,19 +147,14 @@ def run(geocode_fn: GeocodeFunction, storage: StorageBackend = None):
             f"{n_pending} schools still pending"
         )
     else:
-        # No existing geocoded data — all schools are pending
         df_schools[["latitude", "longitude"]] = None, None
         logging.info("No existing geocoded dataset found. Will use geocode_fn for all schools.")
 
-    # ============================================================================
-    # TIER 2: For remaining schools (latitude is NaN), use geocode_fn
-    # ============================================================================
     df_pending = df_schools[df_schools["latitude"].isna()].copy()
 
     if not df_pending.empty:
         logging.info(f"Processing {len(df_pending)} schools with geocode_fn...")
 
-        # Build address strings on pending rows (so each pending school has its own address)
         df_pending[address_col] = (
             df_pending["DS_ENDERECO"].astype(str)
             + ", " + df_pending["NU_ENDERECO"].astype(str)
@@ -185,14 +164,12 @@ def run(geocode_fn: GeocodeFunction, storage: StorageBackend = None):
             + ", " + df_pending["CO_CEP"].astype(str)
         )
 
-        # Unique addresses to geocode
         df_addresses = _build_address_column(
             df_pending,
             columns=transform_config["colunas_endereco"],
             final_col=address_col,
         )[[address_col]].copy()
 
-        # Load checkpoint and filter addresses still pending
         df_done, done_addresses = _load_checkpoint(checkpoint_path, address_col)
         df_to_process = df_addresses[~df_addresses[address_col].isin(done_addresses)].copy()
         logging.info(f"Addresses pending geocoding: {len(df_to_process)}")
@@ -227,7 +204,6 @@ def run(geocode_fn: GeocodeFunction, storage: StorageBackend = None):
         else:
             df_from_api = df_done.copy()
 
-        # Map coordinates back to each pending school by address
         if not df_from_api.empty and address_col in df_from_api.columns:
             for idx, row in df_pending.iterrows():
                 addr = row[address_col]
@@ -236,10 +212,8 @@ def run(geocode_fn: GeocodeFunction, storage: StorageBackend = None):
                     df_schools.at[idx, "latitude"] = api_result.iloc[0]["latitude"]
                     df_schools.at[idx, "longitude"] = api_result.iloc[0]["longitude"]
 
-    # Final result
     df_final = df_schools.copy()
 
-    # Merge latest INEP indicators per school
     df_indicators_latest = _load_latest_indicators(indicators_path)
     if df_indicators_latest is not None and not df_indicators_latest.empty:
         df_final = df_final.merge(df_indicators_latest, on="CO_ENTIDADE", how="left")

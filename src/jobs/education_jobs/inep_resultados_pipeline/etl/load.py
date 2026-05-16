@@ -82,7 +82,6 @@ def run(storage: StorageBackend = None):
         db = client[db_name]
         collection = db[COLLECTION_NAME]
 
-        # Ensure unique index on CO_ENTIDADE for idempotent upserts
         collection.create_index("CO_ENTIDADE", unique=True)
 
         operations = [

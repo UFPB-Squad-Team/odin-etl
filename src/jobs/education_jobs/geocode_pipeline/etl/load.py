@@ -1,9 +1,3 @@
-"""
-Geocode Pipeline — Load Step
-
-Reads the Gold parquet produced by transform and upserts each school
-document into MongoDB using CO_ENTIDADE as the unique key.
-"""
 import logging
 import os
 from pathlib import Path
@@ -185,7 +179,6 @@ def run(storage: StorageBackend = None):
         db = client[db_name]
         collection = db[COLLECTION_NAME]
 
-        # Remove any stale documents that cannot participate in the unique key.
         collection.delete_many(
             {
                 "$and": [
@@ -207,7 +200,6 @@ def run(storage: StorageBackend = None):
             }
         )
 
-        # Ensure unique indexes on both the legacy and friendly identifiers.
         collection.create_index("CO_ENTIDADE", unique=True, sparse=True)
         collection.create_index("escolaIdInep", unique=True, sparse=True)
 

@@ -59,7 +59,6 @@ def _construir_educacao(row: pd.Series) -> dict:
         "pctComLabInformatica": _float_val(row.get("pct_com_lab_informatica")),
         "pctSemAcessibilidade": _float_val(row.get("pct_sem_acessibilidade")),
     }
-    # INEP — opcionais
     for campo, col in [
         ("mediaIdebAnosIniciais", "media_ideb_anos_iniciais"),
         ("mediaIdebAnosFinals", "media_ideb_anos_finais"),
@@ -101,7 +100,6 @@ def run(df_indicadores: pd.DataFrame) -> None:
 
         operacoes = []
         for _, row in df_indicadores.iterrows():
-            # O transform de educação usa 'cd_bairro_ibge' como nome da coluna
             cd_bairro = _val(row.get("cd_bairro_ibge") or row.get("cd_bairro") or row.get("CD_BAIRRO"))
             if cd_bairro is None:
                 continue
@@ -114,7 +112,6 @@ def run(df_indicadores: pd.DataFrame) -> None:
                 "educacao": educacao,
             }
 
-            # Campos geo/identidade — atualiza se disponível
             for dest, src in [
                 ("nm_bairro", "bairro"),
                 ("nm_municipio", "municipio"),

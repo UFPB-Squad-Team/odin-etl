@@ -1,7 +1,3 @@
-# ============================
-# Mapping columns by domain
-# ============================
-
 COLUNAS_IDENTIFICACAO = [
     "NO_REGIAO", "SG_UF", "NO_MUNICIPIO", "CO_MUNICIPIO",
     "NO_ENTIDADE", "CO_ENTIDADE", "TP_DEPENDENCIA",
@@ -56,7 +52,6 @@ COLUNAS_TRANSPORTE = [
     "QT_TRANSP_PUBLICO","QT_TRANSP_RESP_EST","QT_TRANSP_RESP_MUN"
 ]
 
-# all gathered columns
 COLUNAS_TOTAIS = (
     COLUNAS_IDENTIFICACAO +
     COLUNAS_INFRA +
