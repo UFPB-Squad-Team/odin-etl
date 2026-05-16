@@ -719,3 +719,245 @@ def calcular_habitacao(df_domicilio1: pd.DataFrame) -> pd.DataFrame:
         resultado["pct_dom_superlotado"].mean(),
     )
     return resultado
+
+
+# ---------------------------------------------------------------------------
+# Indicadores Prioridade 3 — Composição Domiciliar e Vulnerabilidade
+# ---------------------------------------------------------------------------
+
+def calcular_composicao_domiciliar(df_domicilio1: pd.DataFrame) -> pd.DataFrame:
+    """
+    Calcula indicadores de composição domiciliar.
+
+    Fonte: dataset 'caracteristicas_domicilio1'
+
+    Mapeamento de variáveis:
+        V00001 — domicílios particulares permanentes ocupados (denominador)
+        V00017 — dom. com 1 morador (unipessoal)
+        V00047 — dom. tipo casa
+        V00049 — dom. tipo apartamento
+        V00052 — dom. tipo estrutura degradada ou inacabada
+
+    Indicadores:
+        pct_dom_unipessoal — V00017 / V00001 × 100
+        pct_dom_tipo_casa  — V00047 / V00001 × 100
+        pct_dom_tipo_apto  — V00049 / V00001 × 100
+        pct_dom_degradado  — V00052 / V00001 × 100
+    """
+    df_domicilio1 = _normalizar_chave(df_domicilio1)
+    chave = _chave_geografica(df_domicilio1)
+
+    cols = ["V00001", "V00017", "V00047", "V00049", "V00052"]
+    df = _to_num(df_domicilio1, cols)
+
+    denominador = df["V00001"]
+
+    resultado = df[[chave]].copy()
+    resultado["pct_dom_unipessoal"] = _pct(df["V00017"], denominador)
+    resultado["pct_dom_tipo_casa"]  = _pct(df["V00047"], denominador)
+    resultado["pct_dom_tipo_apto"]  = _pct(df["V00049"], denominador)
+    resultado["pct_dom_degradado"]  = _pct(df["V00052"], denominador)
+
+    logger.info(
+        "calcular_composicao_domiciliar: %d registros | unipessoal: %.1f%% | casa: %.1f%% | apto: %.1f%%",
+        len(resultado),
+        resultado["pct_dom_unipessoal"].mean(),
+        resultado["pct_dom_tipo_casa"].mean(),
+        resultado["pct_dom_tipo_apto"].mean(),
+    )
+    return resultado
+
+
+def calcular_genero_populacao(df_domicilio1: pd.DataFrame) -> pd.DataFrame:
+    """
+    Calcula a distribuição por gênero da população.
+
+    Fonte: dataset 'caracteristicas_domicilio1'
+
+    Mapeamento de variáveis:
+        V00005 — total de moradores em dom. particulares permanentes
+        V00011 — pessoas de sexo masculino em dom. particulares permanentes
+        V00014 — pessoas de sexo feminino em dom. particulares permanentes
+
+    Indicadores:
+        pct_pop_masculina — V00011 / V00005 × 100
+        pct_pop_feminina  — V00014 / V00005 × 100
+    """
+    df_domicilio1 = _normalizar_chave(df_domicilio1)
+    chave = _chave_geografica(df_domicilio1)
+
+    cols = ["V00005", "V00011", "V00014"]
+    df = _to_num(df_domicilio1, cols)
+
+    denominador = df["V00005"]
+
+    resultado = df[[chave]].copy()
+    resultado["pct_pop_masculina"] = _pct(df["V00011"], denominador)
+    resultado["pct_pop_feminina"]  = _pct(df["V00014"], denominador)
+
+    logger.info(
+        "calcular_genero_populacao: %d registros | masc: %.1f%% | fem: %.1f%%",
+        len(resultado),
+        resultado["pct_pop_masculina"].mean(),
+        resultado["pct_pop_feminina"].mean(),
+    )
+    return resultado
+
+
+def calcular_saneamento_banheiro(
+    df_domicilio2: pd.DataFrame,
+    df_basico: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Calcula o percentual de domicílios sem banheiro.
+
+    Fonte: datasets 'caracteristicas_domicilio2' + 'basico'
+
+    Mapeamento de variáveis:
+        V00238 — dom. que não tinham banheiro nem sanitário
+        v0003  — total de domicílios particulares (denominador)
+
+    Indicadores:
+        pct_dom_sem_banheiro — V00238 / v0003 × 100
+    """
+    df_domicilio2 = _normalizar_chave(df_domicilio2)
+    df_basico     = _normalizar_chave(df_basico)
+    chave = _chave_geografica(df_domicilio2)
+    chave_b = _chave_geografica(df_basico)
+
+    df2 = _to_num(df_domicilio2, ["V00238"])
+    dfb = _to_num(df_basico, ["v0003"])
+
+    denominador = df2[[chave]].merge(
+        dfb[[chave_b, "v0003"]].rename(columns={chave_b: chave}),
+        on=chave, how="left",
+    )["v0003"]
+
+    resultado = df2[[chave]].copy()
+    resultado["pct_dom_sem_banheiro"] = _pct(df2["V00238"], denominador)
+
+    logger.info(
+        "calcular_saneamento_banheiro: %d registros | média: %.1f%%",
+        len(resultado), resultado["pct_dom_sem_banheiro"].mean(),
+    )
+    return resultado
+
+
+def calcular_agua_encanamento(
+    df_domicilio2: pd.DataFrame,
+    df_basico: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Calcula o percentual de domicílios onde a água não chega encanada.
+
+    Fonte: datasets 'caracteristicas_domicilio2' + 'basico'
+
+    Mapeamento de variáveis:
+        V00201 — dom. onde água não chega encanada ao domicílio
+        v0003  — total de domicílios particulares (denominador)
+
+    Indicadores:
+        pct_agua_nao_encanada — V00201 / v0003 × 100
+    """
+    df_domicilio2 = _normalizar_chave(df_domicilio2)
+    df_basico     = _normalizar_chave(df_basico)
+    chave = _chave_geografica(df_domicilio2)
+    chave_b = _chave_geografica(df_basico)
+
+    df2 = _to_num(df_domicilio2, ["V00201"])
+    dfb = _to_num(df_basico, ["v0003"])
+
+    denominador = df2[[chave]].merge(
+        dfb[[chave_b, "v0003"]].rename(columns={chave_b: chave}),
+        on=chave, how="left",
+    )["v0003"]
+
+    resultado = df2[[chave]].copy()
+    resultado["pct_agua_nao_encanada"] = _pct(df2["V00201"], denominador)
+
+    logger.info(
+        "calcular_agua_encanamento: %d registros | média: %.1f%%",
+        len(resultado), resultado["pct_agua_nao_encanada"].mean(),
+    )
+    return resultado
+
+
+def calcular_raca_detalhada(df_cor_raca: pd.DataFrame) -> pd.DataFrame:
+    """
+    Calcula percentuais detalhados por raça/cor.
+
+    Fonte: dataset 'cor_ou_raca'
+
+    Mapeamento de variáveis:
+        V01317 — branca
+        V01318 — preta
+        V01319 — amarela
+        V01320 — parda
+        V01321 — indígena
+
+    Indicadores:
+        pct_branca   — V01317 / total × 100
+        pct_indigena — V01321 / total × 100
+    """
+    df_cor_raca = _normalizar_chave(df_cor_raca)
+    chave = _chave_geografica(df_cor_raca)
+
+    cols = ["V01317", "V01318", "V01319", "V01320", "V01321"]
+    df = _to_num(df_cor_raca, cols)
+
+    total_raca = df[cols].sum(axis=1)
+
+    resultado = df[[chave]].copy()
+    resultado["pct_branca"]   = _pct(df["V01317"], total_raca)
+    resultado["pct_indigena"] = _pct(df["V01321"], total_raca)
+
+    logger.info(
+        "calcular_raca_detalhada: %d registros | branca: %.1f%% | indígena: %.1f%%",
+        len(resultado),
+        resultado["pct_branca"].mean(),
+        resultado["pct_indigena"].mean(),
+    )
+    return resultado
+
+
+def calcular_estrutura_etaria_detalhada(df_demografia: pd.DataFrame) -> pd.DataFrame:
+    """
+    Calcula faixas etárias detalhadas para análise demográfica.
+
+    Fonte: dataset 'demografia'
+
+    Mapeamento de variáveis (faixas TOTAIS masc+fem):
+        V01033 — 10 a 14 anos
+        V01034 — 15 a 19 anos
+        V01035 — 20 a 24 anos
+        V01036 — 25 a 29 anos
+        V01037 — 30 a 39 anos
+        V01038 — 40 a 49 anos
+        V01039 — 50 a 59 anos
+        V01006 — total de moradores (denominador)
+
+    Indicadores:
+        pct_jovens_15_29  — (V01034 + V01035 + V01036) / V01006 × 100
+        pct_adultos_30_59 — (V01037 + V01038 + V01039) / V01006 × 100
+    """
+    df_demografia = _normalizar_chave(df_demografia)
+    chave = _chave_geografica(df_demografia)
+
+    cols = ["V01006", "V01034", "V01035", "V01036", "V01037", "V01038", "V01039"]
+    df = _to_num(df_demografia, cols)
+
+    total = df["V01006"]
+    jovens_15_29  = df[["V01034", "V01035", "V01036"]].sum(axis=1)
+    adultos_30_59 = df[["V01037", "V01038", "V01039"]].sum(axis=1)
+
+    resultado = df[[chave]].copy()
+    resultado["pct_jovens_15_29"]  = _pct(jovens_15_29, total)
+    resultado["pct_adultos_30_59"] = _pct(adultos_30_59, total)
+
+    logger.info(
+        "calcular_estrutura_etaria_detalhada: %d registros | jovens 15-29: %.1f%% | adultos 30-59: %.1f%%",
+        len(resultado),
+        resultado["pct_jovens_15_29"].mean(),
+        resultado["pct_adultos_30_59"].mean(),
+    )
+    return resultado

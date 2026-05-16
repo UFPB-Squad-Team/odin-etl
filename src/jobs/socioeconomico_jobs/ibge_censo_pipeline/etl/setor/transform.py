@@ -84,10 +84,19 @@ def _calcular_todos_indicadores(datasets: Dict[str, pd.DataFrame]) -> pd.DataFra
     ind_obitos      = indicadores.calcular_obitos(datasets["obitos"])
     ind_habitacao   = indicadores.calcular_habitacao(datasets["dom1"])
 
+    # Prioridade 3
+    ind_composicao  = indicadores.calcular_composicao_domiciliar(datasets["dom1"])
+    ind_genero      = indicadores.calcular_genero_populacao(datasets["dom1"])
+    ind_banheiro    = indicadores.calcular_saneamento_banheiro(datasets["dom2"], datasets["basico"])
+    ind_encanamento = indicadores.calcular_agua_encanamento(datasets["dom2"], datasets["basico"])
+    ind_raca_det    = indicadores.calcular_raca_detalhada(datasets["cor_raca"])
+    ind_etaria_det  = indicadores.calcular_estrutura_etaria_detalhada(datasets["demografia"])
+
     df = ind_populacao
     for parcial in [
         ind_etaria, ind_raca, ind_saneamento, ind_alfa, ind_familia,
         ind_agua_inad, ind_esgoto_inad, ind_lixo_inad, ind_dep, ind_obitos, ind_habitacao,
+        ind_composicao, ind_genero, ind_banheiro, ind_encanamento, ind_raca_det, ind_etaria_det,
     ]:
         df = df.merge(parcial, on=_CHAVE, how="outer")
 

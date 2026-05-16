@@ -115,18 +115,28 @@ def _construir_socioeconomico(row: pd.Series) -> dict:
         "estruturaEtaria": {
             "pctCriancas0a9": _float_val(row.get("pct_criancas_0_9")),
             "pctIdosos60Mais": _float_val(row.get("pct_idosos_60_mais")),
+            "pctJovens15a29": _float_val(row.get("pct_jovens_15_29")),
+            "pctAdultos30a59": _float_val(row.get("pct_adultos_30_59")),
             "razaoDependencia": _float_val(row.get("razao_dependencia")),
+        },
+        "genero": {
+            "pctPopMasculina": _float_val(row.get("pct_pop_masculina")),
+            "pctPopFeminina": _float_val(row.get("pct_pop_feminina")),
         },
         "raca": {
             "pctPretaParda": _float_val(row.get("pct_preta_parda")),
+            "pctBranca": _float_val(row.get("pct_branca")),
+            "pctIndigena": _float_val(row.get("pct_indigena")),
         },
         "saneamento": {
             "pctAguaRedeGeral":    _float_val(row.get("pct_agua_rede_geral")),
             "pctAguaInadequada":   _float_val(row.get("pct_agua_inadequada")),
+            "pctAguaNaoEncanada":  _float_val(row.get("pct_agua_nao_encanada")),
             "pctEsgotoRedeGeral":  _float_val(row.get("pct_esgoto_rede_geral")),
             "pctEsgotoInadequado": _float_val(row.get("pct_esgoto_inadequado")),
             "pctLixoColetado":     _float_val(row.get("pct_lixo_coletado")),
             "pctLixoInadequado":   _float_val(row.get("pct_lixo_inadequado")),
+            "pctDomSemBanheiro":   _float_val(row.get("pct_dom_sem_banheiro")),
         },
         "educacaoPopulacao": {
             "taxaAnalfabetismo15Mais": _float_val(row.get("taxa_analfabetismo_15_mais")),
@@ -141,6 +151,10 @@ def _construir_socioeconomico(row: pd.Series) -> dict:
         "habitacao": {
             "pctDomImprovisado": _float_val(row.get("pct_dom_improvisado")),
             "pctDomSuperlotado": _float_val(row.get("pct_dom_superlotado")),
+            "pctDomUnipessoal":  _float_val(row.get("pct_dom_unipessoal")),
+            "pctDomTipoCasa":    _float_val(row.get("pct_dom_tipo_casa")),
+            "pctDomTipoApto":    _float_val(row.get("pct_dom_tipo_apto")),
+            "pctDomDegradado":   _float_val(row.get("pct_dom_degradado")),
         },
     }
 

@@ -204,6 +204,29 @@ def _build_indicadores(row: pd.Series) -> dict:
     )
 
 
+def _build_matriculas(row: pd.Series) -> dict:
+    """Constrói o sub-documento de matrículas por nível de ensino."""
+    infantil = _to_int(row.get("QT_MAT_INF"))
+    fundamental = _to_int(row.get("QT_MAT_FUND"))
+    medio = _to_int(row.get("QT_MAT_MED"))
+    eja = _to_int(row.get("QT_MAT_EJA"))
+
+    valores = [v for v in [infantil, fundamental, medio, eja] if v is not None]
+    total = sum(valores) if valores else None
+
+    return {
+        "totalAlunos": total,
+        "educacaoInfantil": infantil,
+        "educacaoInfantilCreche": _to_int(row.get("QT_MAT_INF_CRE")),
+        "educacaoInfantilPreEscola": _to_int(row.get("QT_MAT_INF_PRE")),
+        "fundamentalTotal": fundamental,
+        "fundamentalAnosIniciais": _to_int(row.get("QT_MAT_FUND_AI")),
+        "fundamentalAnosFinais": _to_int(row.get("QT_MAT_FUND_AF")),
+        "ensinoMedio": medio,
+        "eja": eja,
+    }
+
+
 def _build_school_document(row: pd.Series) -> dict:
     return _clean_value(
         {
@@ -218,6 +241,7 @@ def _build_school_document(row: pd.Series) -> dict:
             "situacaoFuncionamento": _to_text(row.get("TP_SITUACAO_FUNCIONAMENTO")),
             "endereco": _build_endereco(row),
             "localizacao": _build_localizacao(row.get("latitude"), row.get("longitude")),
+            "matriculas": _build_matriculas(row),
             "infraestrutura": _build_infraestrutura(row),
             "indicadores": _build_indicadores(row),
         }

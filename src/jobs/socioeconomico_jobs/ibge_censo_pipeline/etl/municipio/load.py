@@ -32,30 +32,56 @@ def _construir_documento_municipio(row: pd.Series) -> Dict[str, Any]:
     return {
         "populacao": {
             "total": _val(row.get('total_populacao')),
-            "totalDomicilios": _val(row.get('total_domicilios')),
+            "totalDomicilios": _val(row.get('total_domicilios_particulares')),
             "mediaMoradoresPorDomicilio": _val(row.get('media_moradores_por_domicilio')),
         },
         "estruturaEtaria": {
             "pctCriancas0a9": _val(row.get('pct_criancas_0_9')),
             "pctIdosos60Mais": _val(row.get('pct_idosos_60_mais')),
+            "pctJovens15a29": _val(row.get('pct_jovens_15_29')),
+            "pctAdultos30a59": _val(row.get('pct_adultos_30_59')),
+            "razaoDependencia": _val(row.get('razao_dependencia')),
+        },
+        "genero": {
+            "pctPopMasculina": _val(row.get('pct_pop_masculina')),
+            "pctPopFeminina": _val(row.get('pct_pop_feminina')),
         },
         "raca": {
             "pctPretaParda": _val(row.get('pct_preta_parda')),
+            "pctBranca": _val(row.get('pct_branca')),
+            "pctIndigena": _val(row.get('pct_indigena')),
         },
         "saneamento": {
             "pctAguaRedeGeral": _val(row.get('pct_agua_rede_geral')),
+            "pctAguaInadequada": _val(row.get('pct_agua_inadequada')),
+            "pctAguaNaoEncanada": _val(row.get('pct_agua_nao_encanada')),
             "pctEsgotoRedeGeral": _val(row.get('pct_esgoto_rede_geral')),
+            "pctEsgotoInadequado": _val(row.get('pct_esgoto_inadequado')),
             "pctLixoColetado": _val(row.get('pct_lixo_coletado')),
+            "pctLixoInadequado": _val(row.get('pct_lixo_inadequado')),
+            "pctDomSemBanheiro": _val(row.get('pct_dom_sem_banheiro')),
         },
-        "educacao": {
+        "educacaoPopulacao": {
             "taxaAnalfabetismo15Mais": _val(row.get('taxa_analfabetismo_15_mais')),
         },
         "familia": {
             "pctResponsavelFeminino": _val(row.get('pct_responsavel_feminino')),
         },
+        "mortalidade": {
+            "totalObitosDomicilios": _val(row.get('total_obitos_domicilios')),
+            "obitosInfantis0a4": _val(row.get('obitos_infantis_0_4')),
+        },
+        "habitacao": {
+            "pctDomImprovisado": _val(row.get('pct_dom_improvisado')),
+            "pctDomSuperlotado": _val(row.get('pct_dom_superlotado')),
+            "pctDomUnipessoal": _val(row.get('pct_dom_unipessoal')),
+            "pctDomTipoCasa": _val(row.get('pct_dom_tipo_casa')),
+            "pctDomTipoApto": _val(row.get('pct_dom_tipo_apto')),
+            "pctDomDegradado": _val(row.get('pct_dom_degradado')),
+        },
     }
 
-def run(storage: StorageBackend = None) -> int:
+def run(df: pd.DataFrame = None, storage: StorageBackend = None) -> int:
     """
     Upsert de indicadores socioeconômicos por município no MongoDB.
 
@@ -65,6 +91,7 @@ def run(storage: StorageBackend = None) -> int:
         - Evita sobrescrever sub-documentos de outros pipelines (como 'educacao')
 
     Args:
+        df:      DataFrame do Gold (saída do transform). Se None, carrega do parquet.
         storage: Instância do StorageBackend para leitura dos dados em parquet.
     """
     load_dotenv()
@@ -78,12 +105,15 @@ def run(storage: StorageBackend = None) -> int:
     gold_file = config.get("transform_municipio", {}).get("gold_output", "municipio_socioeconomico_pb.parquet")
     gold_path = f"data/gold/{gold_file}"
     
-    try:
-        df = storage.read_parquet(gold_path)
-        logger.info(f"Carregando {len(df)} municípios da camada Gold...")
-    except Exception as e:
-        logger.error(f"Falha ao ler o arquivo Gold em {gold_path}: {e}")
-        raise
+    if df is None:
+        try:
+            df = storage.read_parquet(gold_path)
+            logger.info(f"Carregando {len(df)} municípios da camada Gold...")
+        except Exception as e:
+            logger.error(f"Falha ao ler o arquivo Gold em {gold_path}: {e}")
+            raise
+    else:
+        logger.info(f"Usando DataFrame recebido: {len(df)} municípios")
 
     mongo_uri = os.getenv("MONGO_URI")
     db_name = os.getenv("MONGO_DB_NAME")
@@ -99,8 +129,8 @@ def run(storage: StorageBackend = None) -> int:
         db = client[db_name]
         collection = db[colecao_nome]
 
-        collection.create_index([("municipioIdIbge", ASCENDING)], unique=True)
-        collection.create_index([("uf", ASCENDING)])
+        collection.create_index([("municipioIdIbge", ASCENDING)], unique=True, sparse=True)
+        collection.create_index([("uf", ASCENDING)], sparse=True)
 
         operacoes = []
         

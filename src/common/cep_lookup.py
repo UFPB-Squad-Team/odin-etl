@@ -50,7 +50,8 @@ def enriquecer_com_cep(df_escolas: pd.DataFrame, cep_path: str) -> pd.DataFrame:
             bairro_cep, municipio_cep, id_mundv_cep,
             lat_cep, lon_cep
     """
-    # Normalizar CO_CEP para string com 8 dígitos
+    df_cep = carregar_cep(cep_path)
+
     df = df_escolas.copy()
     df["_cep_join"] = (
         df["CO_CEP"]
