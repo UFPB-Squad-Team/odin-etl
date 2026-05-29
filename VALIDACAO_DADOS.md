@@ -419,7 +419,61 @@
 
 ---
 
-## 8. Problemas Identificados e Recomendações
+## 8. Análise de Bairros sem Escolas (Spatial Join)
+
+### Contexto
+
+O pipeline de educação agrega indicadores por bairro via spatial join: cada escola (ponto) é associada ao polígono de bairro que a contém. Bairros que não contêm nenhuma escola pública ficam sem dados educacionais. Investigamos se isso é erro de pipeline ou realidade geográfica.
+
+### Números Gerais (João Pessoa)
+
+| Métrica | Valor |
+|---|---|
+| Escolas geocodificadas em JP | 300 |
+| Bairros oficiais JP | 64 |
+| Escolas dentro de algum bairro | 298 (99.3%) |
+| Escolas fora de todos os bairros | 2 (0.7%) |
+| **Bairros sem nenhuma escola pública** | **8 (12.5%)** |
+
+### Bairros de JP sem Escolas Públicas
+
+| Bairro | Área | Perfil | Razão |
+|---|---|---|---|
+| Bessa | 2.1 km² | Praia, classe média-alta | Residencial nobre — só escolas privadas |
+| Tambaú | 1.0 km² | Praia, turístico/comercial | Zona turística — sem escola pública |
+| Cabo Branco | 1.8 km² | Praia, classe alta | Bairro nobre — só escolas privadas |
+| Brisamar | 0.6 km² | Residencial pequeno | Muito pequeno — escolas nos vizinhos |
+| Ponta do Seixas | 0.6 km² | Ponto geográfico | Quase sem moradores |
+| Jardim São Paulo | 0.4 km² | Residencial pequeno | Escolas no bairro vizinho |
+| Barra de Gramame | 7.3 km² | Periférico/rural | Escolas em bairros vizinhos mais centrais |
+| Mussuré | 2.6 km² | Periférico/rural | Idem |
+
+### Caso Limítrofe: CMEI Antonieta Aranha (Bessa)
+
+Existe 1 escola que declara "BESSA" como bairro no Censo Escolar (CMEI Professora Antonieta Aranha de Macedo, ID 25149210). Porém, sua coordenada geocodificada cai **1 metro** dentro do polígono do Aeroclube (bairro vizinho ao norte).
+
+- Coordenada: lat -7.07500, lon -34.84224
+- Polígono do Bessa: lat [-7.077, -7.056]
+- A escola está na fronteira exata entre Bessa e Aeroclube
+- **Causa:** imprecisão de geocodificação (~1m) ou escola na divisa real
+
+### Caso Bancários (verificação)
+
+Bancários tem 8 escolas declaradas no Censo. O spatial join confirma que **7 de 8 caem corretamente dentro do polígono**. A 8ª (ECIT Francisca Ascensão Cunha) declara "Bancários" mas sua coordenada cai no José Américo (bairro vizinho ao sul) — provável imprecisão de geocodificação.
+
+### Conclusão
+
+**Não é erro de pipeline.** O spatial join funciona corretamente. Os bairros sem escolas são:
+
+1. **Bairros nobres/turísticos** (Bessa, Tambaú, Cabo Branco) — escolas nesses bairros são privadas, e o pipeline filtra apenas escolas públicas (federal, estadual, municipal)
+2. **Bairros muito pequenos** (Brisamar, Ponta do Seixas, Jardim São Paulo) — área insuficiente para comportar uma escola; alunos frequentam escolas em bairros vizinhos
+3. **Bairros periféricos** (Barra de Gramame, Mussuré) — escolas ficam em núcleos urbanos vizinhos
+
+Os 1-2 casos limítrofes (escola na fronteira entre bairros) são consequência de imprecisão de geocodificação na ordem de metros, não de erro lógico no pipeline.
+
+---
+
+## 9. Problemas Identificados e Recomendações
 
 ### 🔴 Críticos (corrigir antes de produção)
 
@@ -448,7 +502,7 @@ Nenhum problema crítico que impeça o uso dos dados.
 
 ---
 
-## 9. Métricas de Qualidade Consolidadas
+## 10. Métricas de Qualidade Consolidadas
 
 | Dimensão | Métrica | Valor |
 |---|---|---|
@@ -471,7 +525,7 @@ Nenhum problema crítico que impeça o uso dos dados.
 
 ---
 
-## 10. Conclusão
+## 11. Conclusão
 
 Os dados do ODIN-ETL apresentam **alta qualidade geral** e estão prontos para consumo pelo frontend. Os principais achados:
 

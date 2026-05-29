@@ -108,7 +108,10 @@ def _calcular_todos_indicadores(datasets: Dict[str, pd.DataFrame]) -> pd.DataFra
 
     df = df.drop(columns=[_COLUNA_AUXILIAR], errors="ignore")
 
-    meta = datasets["basico"][[_CHAVE, "CD_MUN", "NM_MUN"]].copy()
+    meta_cols = [_CHAVE, "CD_MUN", "NM_MUN"]
+    if "NM_BAIRRO" in datasets["basico"].columns:
+        meta_cols.append("NM_BAIRRO")
+    meta = datasets["basico"][meta_cols].copy()
     df = df.merge(meta, on=_CHAVE, how="left")
 
     logger.info("Merge concluído: %d bairros, %d colunas", len(df), len(df.columns))

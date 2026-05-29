@@ -228,6 +228,13 @@ def run(df: Optional[pd.DataFrame] = None, storage=None) -> int:
             if geom is not None:
                 set_payload["geometria"] = geom
 
+            # Sempre gravar nm_bairro no $set para garantir que o campo
+            # exista mesmo em bairros sem escolas (que não passam pelo
+            # pipeline de educação).
+            nm_bairro = _val(row.get("NM_BAIRRO"))
+            if nm_bairro is not None:
+                set_payload["nm_bairro"] = nm_bairro
+
             update = {
                 "$set": set_payload,
                 "$setOnInsert": {
