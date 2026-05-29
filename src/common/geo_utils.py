@@ -85,6 +85,14 @@ def calcular_indicadores(
     colunas_desempenho = [
         "ideb_anos_iniciais", "ideb_anos_finais", "ideb_ensino_medio",
         "inse_valor",
+        "afd_ei", "afd_efi", "afd_eff", "afd_em",
+        "tdi_efi", "tdi_eff", "tdi_em",
+        "taxa_aprovacao_efi", "taxa_aprovacao_eff", "taxa_aprovacao_em",
+        "taxa_reprovacao_efi", "taxa_reprovacao_eff", "taxa_reprovacao_em",
+        "taxa_abandono_efi", "taxa_abandono_eff", "taxa_abandono_em",
+        "dsu_ei", "dsu_efi", "dsu_eff", "dsu_em",
+        "had_ei", "had_efi", "had_eff", "had_em",
+        "atu_ei", "atu_efi", "atu_eff", "atu_em",
     ]
     for coluna in colunas_desempenho:
         if coluna in df.columns:
@@ -112,17 +120,14 @@ def calcular_indicadores(
         total_escolas = len(grupo)
 
         return pd.Series({
-            # ── Totais ────────────────────────────────────────────────────────
             "total_escolas": total_escolas,
             "total_matriculas": int(grupo[colunas_matriculas].sum().sum()),
 
-            # ── Infraestrutura básica ─────────────────────────────────────────
             "pct_com_agua_potavel":          _pct_escolas_com(grupo, "IN_AGUA_POTAVEL"),
             "pct_com_energia_publica":       _pct_escolas_com(grupo, "IN_ENERGIA_REDE_PUBLICA"),
             "pct_com_esgoto_rede_publica":   _pct_escolas_com(grupo, "IN_ESGOTO_REDE_PUBLICA"),
             "pct_com_coleta_lixo":           _pct_escolas_com(grupo, "IN_LIXO_SERVICO_COLETA"),
 
-            # ── Infraestrutura pedagógica ─────────────────────────────────────
             "pct_com_internet":              _pct_escolas_com(grupo, coluna_internet),
             "pct_com_internet_alunos":       _pct_escolas_com(grupo, "IN_INTERNET_ALUNOS"),
             "pct_com_biblioteca":            _pct_escolas_com(grupo, coluna_biblioteca),
@@ -132,16 +137,42 @@ def calcular_indicadores(
             "pct_com_cozinha":               _pct_escolas_com(grupo, "IN_COZINHA"),
             "pct_com_refeitorio":            _pct_escolas_com(grupo, "IN_REFEITORIO"),
 
-            # ── Acessibilidade ────────────────────────────────────────────────
             "pct_sem_acessibilidade":        _pct_escolas_com(grupo, coluna_sem_acessibilidade),
 
-            # ── IDEB 2023 ─────────────────────────────────────────────────────
             "media_ideb_anos_iniciais":      _media_indicador(grupo, "ideb_anos_iniciais"),
             "media_ideb_anos_finais":        _media_indicador(grupo, "ideb_anos_finais"),
             "media_ideb_ensino_medio":       _media_indicador(grupo, "ideb_ensino_medio"),
 
-            # ── INSE ──────────────────────────────────────────────────────────
             "media_inse":                    _media_indicador(grupo, "inse_valor"),
+
+            "media_afd_anos_iniciais":       _media_indicador(grupo, "afd_efi"),
+            "media_afd_anos_finais":         _media_indicador(grupo, "afd_eff"),
+            "media_afd_ensino_medio":        _media_indicador(grupo, "afd_em"),
+
+            "media_tdi_anos_iniciais":       _media_indicador(grupo, "tdi_efi"),
+            "media_tdi_anos_finais":         _media_indicador(grupo, "tdi_eff"),
+            "media_tdi_ensino_medio":        _media_indicador(grupo, "tdi_em"),
+
+            "media_taxa_aprovacao_ai":       _media_indicador(grupo, "taxa_aprovacao_efi"),
+            "media_taxa_aprovacao_af":       _media_indicador(grupo, "taxa_aprovacao_eff"),
+            "media_taxa_aprovacao_em":       _media_indicador(grupo, "taxa_aprovacao_em"),
+
+            "media_taxa_abandono_ai":        _media_indicador(grupo, "taxa_abandono_efi"),
+            "media_taxa_abandono_af":        _media_indicador(grupo, "taxa_abandono_eff"),
+            "media_taxa_abandono_em":        _media_indicador(grupo, "taxa_abandono_em"),
+
+            "media_docentes_superior_ei":    _media_indicador(grupo, "dsu_ei"),
+            "media_docentes_superior_ai":    _media_indicador(grupo, "dsu_efi"),
+            "media_docentes_superior_af":    _media_indicador(grupo, "dsu_eff"),
+            "media_docentes_superior_em":    _media_indicador(grupo, "dsu_em"),
+
+            "media_horas_aula_ai":           _media_indicador(grupo, "had_efi"),
+            "media_horas_aula_af":           _media_indicador(grupo, "had_eff"),
+            "media_horas_aula_em":           _media_indicador(grupo, "had_em"),
+
+            "media_alunos_turma_ai":         _media_indicador(grupo, "atu_efi"),
+            "media_alunos_turma_af":         _media_indicador(grupo, "atu_eff"),
+            "media_alunos_turma_em":         _media_indicador(grupo, "atu_em"),
         })
 
     return df.groupby(group_col).apply(_agregar_grupo, include_groups=False).reset_index()

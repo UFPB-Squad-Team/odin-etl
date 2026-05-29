@@ -54,20 +54,46 @@ def _construir_educacao(row: pd.Series) -> dict:
     doc = {
         "totalEscolas": _int_val(row.get("total_escolas")),
         "totalMatriculas": _int_val(row.get("total_matriculas")),
+        "pctComAguaPotavel": _float_val(row.get("pct_com_agua_potavel")),
+        "pctComEnergiaPublica": _float_val(row.get("pct_com_energia_publica")),
+        "pctComEsgotoRedePublica": _float_val(row.get("pct_com_esgoto_rede_publica")),
+        "pctComColetaLixo": _float_val(row.get("pct_com_coleta_lixo")),
         "pctComInternet": _float_val(row.get("pct_com_internet")),
+        "pctComInternetAlunos": _float_val(row.get("pct_com_internet_alunos")),
         "pctComBiblioteca": _float_val(row.get("pct_com_biblioteca")),
-        "pctComLabInformatica": _float_val(row.get("pct_com_lab_informatica")),
+        "pctComLaboratorioInformatica": _float_val(row.get("pct_com_laboratorio_informatica")),
+        "pctComLaboratorioCiencias": _float_val(row.get("pct_com_laboratorio_ciencias")),
+        "pctComQuadraEsportes": _float_val(row.get("pct_com_quadra_esportes")),
+        "pctComCozinha": _float_val(row.get("pct_com_cozinha")),
+        "pctComRefeitorio": _float_val(row.get("pct_com_refeitorio")),
         "pctSemAcessibilidade": _float_val(row.get("pct_sem_acessibilidade")),
+        "mediaIdebAnosIniciais": _float_val(row.get("media_ideb_anos_iniciais"), decimais=2),
+        "mediaIdebAnosFinals": _float_val(row.get("media_ideb_anos_finais"), decimais=2),
+        "mediaIdebEnsinoMedio": _float_val(row.get("media_ideb_ensino_medio"), decimais=2),
+        "mediaInse": _float_val(row.get("media_inse"), decimais=2),
+        "mediaAfdAnosIniciais": _float_val(row.get("media_afd_anos_iniciais"), decimais=1),
+        "mediaAfdAnosFinais": _float_val(row.get("media_afd_anos_finais"), decimais=1),
+        "mediaAfdEnsinoMedio": _float_val(row.get("media_afd_ensino_medio"), decimais=1),
+        "mediaTdiAnosIniciais": _float_val(row.get("media_tdi_anos_iniciais"), decimais=1),
+        "mediaTdiAnosFinais": _float_val(row.get("media_tdi_anos_finais"), decimais=1),
+        "mediaTdiEnsinoMedio": _float_val(row.get("media_tdi_ensino_medio"), decimais=1),
+        "mediaTaxaAprovacaoAi": _float_val(row.get("media_taxa_aprovacao_ai"), decimais=1),
+        "mediaTaxaAprovacaoAf": _float_val(row.get("media_taxa_aprovacao_af"), decimais=1),
+        "mediaTaxaAprovacaoEm": _float_val(row.get("media_taxa_aprovacao_em"), decimais=1),
+        "mediaTaxaAbandonoAi": _float_val(row.get("media_taxa_abandono_ai"), decimais=1),
+        "mediaTaxaAbandonoAf": _float_val(row.get("media_taxa_abandono_af"), decimais=1),
+        "mediaTaxaAbandonoEm": _float_val(row.get("media_taxa_abandono_em"), decimais=1),
+        "mediaDocentesSuperiorAi": _float_val(row.get("media_docentes_superior_ai"), decimais=1),
+        "mediaDocentesSuperiorAf": _float_val(row.get("media_docentes_superior_af"), decimais=1),
+        "mediaDocentesSuperiorEm": _float_val(row.get("media_docentes_superior_em"), decimais=1),
+        "mediaHorasAulaAi": _float_val(row.get("media_horas_aula_ai"), decimais=1),
+        "mediaHorasAulaAf": _float_val(row.get("media_horas_aula_af"), decimais=1),
+        "mediaHorasAulaEm": _float_val(row.get("media_horas_aula_em"), decimais=1),
+        "mediaAlunosTurmaAi": _float_val(row.get("media_alunos_turma_ai"), decimais=1),
+        "mediaAlunosTurmaAf": _float_val(row.get("media_alunos_turma_af"), decimais=1),
+        "mediaAlunosTurmaEm": _float_val(row.get("media_alunos_turma_em"), decimais=1),
     }
-    for campo, col in [
-        ("mediaIdebAnosIniciais", "media_ideb_anos_iniciais"),
-        ("mediaIdebAnosFinals", "media_ideb_anos_finais"),
-        ("mediaInse", "media_inse"),
-    ]:
-        v = _float_val(row.get(col), decimais=2)
-        if v is not None:
-            doc[campo] = v
-    return doc
+    return {k: v for k, v in doc.items() if v is not None}
 
 
 def run(df_indicadores: pd.DataFrame) -> None:

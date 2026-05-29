@@ -117,15 +117,42 @@ def run(
             if not isinstance(doc, dict):
                 continue
             ind = doc.get("indicadores") or {}
+            efi = ind.get("fundamentalAnosIniciais") or {}
+            eff = ind.get("fundamentalAnosFinais") or {}
+            em = ind.get("ensinoMedio") or {}
+            ei = ind.get("educacaoInfantil") or {}
             ideb_rows.append({
                 "CO_ENTIDADE": str(escola_id),
                 "ideb_anos_iniciais": ind.get("idebAnosIniciais"),
                 "ideb_anos_finais":   ind.get("idebAnosFinais"),
+                "ideb_ensino_medio":  ind.get("idebEnsinoMedio"),
+                "afd_efi": efi.get("afd"),
+                "afd_eff": eff.get("afd"),
+                "afd_em":  em.get("afd"),
+                "tdi_efi": efi.get("tdi"),
+                "tdi_eff": eff.get("tdi"),
+                "tdi_em":  em.get("tdi"),
+                "taxa_aprovacao_efi": efi.get("taxa_aprovacao"),
+                "taxa_aprovacao_eff": eff.get("taxa_aprovacao"),
+                "taxa_aprovacao_em":  em.get("taxa_aprovacao"),
+                "taxa_abandono_efi": efi.get("taxa_abandono"),
+                "taxa_abandono_eff": eff.get("taxa_abandono"),
+                "taxa_abandono_em":  em.get("taxa_abandono"),
+                "dsu_ei":  ei.get("docentes_superior"),
+                "dsu_efi": efi.get("docentes_superior"),
+                "dsu_eff": eff.get("docentes_superior"),
+                "dsu_em":  em.get("docentes_superior"),
+                "had_efi": efi.get("horas_aula_diarias"),
+                "had_eff": eff.get("horas_aula_diarias"),
+                "had_em":  em.get("horas_aula_diarias"),
+                "atu_efi": efi.get("alunos_por_turma"),
+                "atu_eff": eff.get("alunos_por_turma"),
+                "atu_em":  em.get("alunos_por_turma"),
             })
         if ideb_rows:
             df_ideb = pd.DataFrame(ideb_rows)
             df_censo = df_censo.merge(df_ideb, on="CO_ENTIDADE", how="left")
-            logger.info("IDEB adicionado: %d escolas com ideb_anos_iniciais",
+            logger.info("Indicadores INEP adicionados: %d escolas com dados",
                         df_ideb["ideb_anos_iniciais"].notna().sum())
 
     # Join com dados do censo

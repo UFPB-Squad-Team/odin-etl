@@ -18,15 +18,12 @@ _CAMPOS_ROOT = {
 }
 
 _CAMPOS_EDUCACAO = {
-    # Totais
     "total_escolas":                    "totalEscolas",
     "total_matriculas":                 "totalMatriculas",
-    # Infraestrutura básica
     "pct_com_agua_potavel":             "pctComAguaPotavel",
     "pct_com_energia_publica":          "pctComEnergiaPublica",
     "pct_com_esgoto_rede_publica":      "pctComEsgotoRedePublica",
     "pct_com_coleta_lixo":              "pctComColetaLixo",
-    # Infraestrutura pedagógica
     "pct_com_internet":                 "pctComInternet",
     "pct_com_internet_alunos":          "pctComInternetAlunos",
     "pct_com_biblioteca":               "pctComBiblioteca",
@@ -35,14 +32,32 @@ _CAMPOS_EDUCACAO = {
     "pct_com_quadra_esportes":          "pctComQuadraEsportes",
     "pct_com_cozinha":                  "pctComCozinha",
     "pct_com_refeitorio":               "pctComRefeitorio",
-    # Acessibilidade
     "pct_sem_acessibilidade":           "pctSemAcessibilidade",
-    # IDEB 2023
     "media_ideb_anos_iniciais":         "mediaIdebAnosIniciais",
     "media_ideb_anos_finais":           "mediaIdebAnosFinals",
     "media_ideb_ensino_medio":          "mediaIdebEnsinoMedio",
-    # INSE
     "media_inse":                       "mediaInse",
+    "media_afd_anos_iniciais":          "mediaAfdAnosIniciais",
+    "media_afd_anos_finais":            "mediaAfdAnosFinais",
+    "media_afd_ensino_medio":           "mediaAfdEnsinoMedio",
+    "media_tdi_anos_iniciais":          "mediaTdiAnosIniciais",
+    "media_tdi_anos_finais":            "mediaTdiAnosFinais",
+    "media_tdi_ensino_medio":           "mediaTdiEnsinoMedio",
+    "media_taxa_aprovacao_ai":          "mediaTaxaAprovacaoAi",
+    "media_taxa_aprovacao_af":          "mediaTaxaAprovacaoAf",
+    "media_taxa_aprovacao_em":          "mediaTaxaAprovacaoEm",
+    "media_taxa_abandono_ai":           "mediaTaxaAbandonoAi",
+    "media_taxa_abandono_af":           "mediaTaxaAbandonoAf",
+    "media_taxa_abandono_em":           "mediaTaxaAbandonoEm",
+    "media_docentes_superior_ai":       "mediaDocentesSuperiorAi",
+    "media_docentes_superior_af":       "mediaDocentesSuperiorAf",
+    "media_docentes_superior_em":       "mediaDocentesSuperiorEm",
+    "media_horas_aula_ai":              "mediaHorasAulaAi",
+    "media_horas_aula_af":              "mediaHorasAulaAf",
+    "media_horas_aula_em":              "mediaHorasAulaEm",
+    "media_alunos_turma_ai":            "mediaAlunosTurmaAi",
+    "media_alunos_turma_af":            "mediaAlunosTurmaAf",
+    "media_alunos_turma_em":            "mediaAlunosTurmaEm",
 }
 
 

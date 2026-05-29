@@ -137,20 +137,33 @@ def run(df: pd.DataFrame = None, storage: StorageBackend = None) -> int:
         for _, row in df.iterrows():
             municipio_id = int(row['CD_MUN'])
             
-            campos_base = {
-                "municipioIdIbge": municipio_id,
-                "uf": _val(row.get('uf')),
-                "anoReferencia": _val(row.get('ano_referencia')),
-                "fonte": _val(row.get('fonte')),
-            }
-            
             dados_socioeconomicos = _construir_documento_municipio(row)
-            documento_final = {**campos_base, **dados_socioeconomicos}
+            dados_socioeconomicos["anoReferencia"] = _val(row.get('ano_referencia'))
+            dados_socioeconomicos["fonte"] = _val(row.get('fonte'))
 
             operacoes.append(
                 UpdateOne(
                     {"municipioIdIbge": municipio_id},
-                    {"$set": documento_final},
+                    {
+                        "$set": {"socioeconomico": dados_socioeconomicos},
+                        "$setOnInsert": {
+                            "municipioIdIbge": municipio_id,
+                            "uf": _val(row.get('uf')),
+                        },
+                        "$unset": {
+                            "populacao": "",
+                            "estruturaEtaria": "",
+                            "genero": "",
+                            "raca": "",
+                            "saneamento": "",
+                            "educacaoPopulacao": "",
+                            "familia": "",
+                            "mortalidade": "",
+                            "habitacao": "",
+                            "anoReferencia": "",
+                            "fonte": "",
+                        },
+                    },
                     upsert=True
                 )
             )
