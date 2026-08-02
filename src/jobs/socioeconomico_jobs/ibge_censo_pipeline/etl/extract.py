@@ -60,11 +60,12 @@ FTP = _build_ftp_config()
 GRANULARIDADES: Dict[str, GranularidadeConfig] = _build_granularidade_map()
 DATASETS: List[str] = _cfg["datasets"]
 NOMES_COM_DATA: Dict[str, str] = _cfg["nomes_com_data"]
-FILTRO_UF: str = _cfg["filtro_uf"]
+FILTRO_UF: List[str] = _cfg["filtro_uf"]
 CSV_ENCODING: str = _cfg["csv"]["encoding"]
 CSV_SEPARADOR: str = _cfg["csv"]["separador"]
 BRONZE_DIR: Path = Path(_cfg["paths"]["bronze"])
 SILVER_DIR: Path = Path(_cfg["paths"]["silver"])
+
 
 def _resolver_nome_zip(prefixo: str, dataset: str) -> str:
     """
@@ -138,9 +139,7 @@ def _baixar_com_retry(caminho_ftp: str, destino: Path) -> None:
                 ) from exc
 
 
-# ---------------------------------------------------------------------------
-# Bronze → Silver
-# ---------------------------------------------------------------------------
+
 
 def _ler_csv_do_zip(zip_path: Path) -> pd.DataFrame:
     """Extrai e lê o primeiro CSV encontrado dentro de um ZIP do IBGE."""
@@ -157,8 +156,8 @@ def _ler_csv_do_zip(zip_path: Path) -> pd.DataFrame:
                 f,
                 sep=CSV_SEPARADOR,
                 encoding=CSV_ENCODING,
-                dtype=str,         # conversão numérica fica na etapa Transform
-                low_memory=False,  # evita DtypeWarning em arquivos grandes
+                dtype=str,         
+                low_memory=False,  
             )
 
 
@@ -176,11 +175,10 @@ def _coluna_case_insensitive(df: pd.DataFrame, nome: str) -> str | None:
 
 def _filtrar_uf(df: pd.DataFrame, dataset: str, granularidade: str) -> pd.DataFrame:
     """
-    Filtra o DataFrame para a UF configurada em FILTRO_UF.
+    Filtra o DataFrame para as UFs configuradas em FILTRO_UF.
 
-    Tenta as colunas CD_UF → CD_MUN → CD_SETOR → setor nessa ordem,
-    com busca case-insensitive (o IBGE usa casing inconsistente entre datasets).
-    CD_UF faz match exato; as demais usam startswith (prefixo de 2 dígitos).
+    Tenta CD_UF → CD_MUN → CD_SETOR → CD_BAIRRO → setor nessa ordem,
+    CD_UF faz match exato; nas demais, os dois primeiros dígitos identificam a UF.
     """
     for nome_coluna in _COLUNAS_UF_PRIORIDADE:
         coluna = _coluna_case_insensitive(df, nome_coluna)
@@ -188,13 +186,13 @@ def _filtrar_uf(df: pd.DataFrame, dataset: str, granularidade: str) -> pd.DataFr
             continue
 
         if nome_coluna == "CD_UF":
-            filtrado = df[df[coluna] == FILTRO_UF].copy()
+            filtrado = df[df[coluna].isin(FILTRO_UF)].copy()
         else:
-            filtrado = df[df[coluna].str.startswith(FILTRO_UF)].copy()
+            filtrado = df[df[coluna].str[:2].isin(FILTRO_UF)].copy()
 
         pct = len(filtrado) / len(df) * 100 if len(df) > 0 else 0
         logger.info(
-            "Registros UF=%s via %s: %d (%.1f%% do Brasil)",
+            "Registros UFs=%s via %s: %d (%.1f%% do Brasil)",
             FILTRO_UF, coluna, len(filtrado), pct,
         )
         return filtrado
@@ -209,7 +207,7 @@ def _filtrar_uf(df: pd.DataFrame, dataset: str, granularidade: str) -> pd.DataFr
 
 def _salvar_silver(df: pd.DataFrame, dataset: str, granularidade: str, storage: StorageBackend) -> str:
     """Persiste o DataFrame filtrado como Parquet no Silver e retorna o caminho."""
-    nome_arquivo = f"ibge_censo2022_{granularidade}_{dataset}_pb.parquet"
+    nome_arquivo = f"ibge_censo2022_{granularidade}_{dataset}_nordeste.parquet"
     caminho = str(SILVER_DIR / nome_arquivo)
     storage.save_parquet(df, caminho)
     logger.info("Salvo no Silver: %s (%d registros, %d colunas)", nome_arquivo, len(df), len(df.columns))
@@ -223,7 +221,7 @@ def _extrair_e_filtrar(
     storage: StorageBackend,
 ) -> str:
     """
-    Extrai o CSV do ZIP, filtra pela UF alvo e salva como Parquet no Silver.
+    Extrai o CSV do ZIP, filtra pelas UFs alvo e salva como Parquet no Silver.
 
     Args:
         zip_path:      Caminho do ZIP no Bronze.
@@ -242,7 +240,12 @@ def _extrair_e_filtrar(
     df = _filtrar_uf(df, dataset, granularidade)
 
     if df.empty:
-        logger.warning("Nenhum registro da UF=%s encontrado em %s (%s)!", FILTRO_UF, dataset, granularidade)
+        logger.warning(
+            "Nenhum registro das UFs=%s encontrado em %s (%s)!",
+            FILTRO_UF,
+            dataset,
+            granularidade,
+        )
 
     return _salvar_silver(df, dataset, granularidade, storage)
 
@@ -350,7 +353,7 @@ def run(
 
     Returns:
         Dict com listas de caminhos Parquet por granularidade.
-        Ex: {'municipio': ['data/silver/ibge_censo2022_municipio_basico_pb.parquet', ...]}
+        Ex: {'municipio': ['data/silver/ibge_censo2022_municipio_basico_nordeste.parquet', ...]}
 
     Exemplo de uso parcial:
         >>> run(granularidades=['municipio'], datasets=['basico'])
