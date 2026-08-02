@@ -6,6 +6,7 @@ from typing import Dict, List, Optional
 import pandas as pd
 import yaml
 
+from src.common.ibge_codes import sigla_uf_por_codigo_municipio
 from src.common.storage import StorageBackend, get_storage_backend
 from src.jobs.socioeconomico_jobs.ibge_censo_pipeline import indicadores
 
@@ -22,12 +23,9 @@ def _load_config() -> dict:
 _cfg = _load_config()
 _tcfg = _cfg["transform_municipio"]
 
-SILVER_INPUTS: Dict[str, str] = _tcfg["silver_inputs"]
+_SILVER_INPUTS: Dict[str, str] = _tcfg["silver_inputs"]
 GOLD_OUTPUT: str = str(Path(_cfg["paths"]["gold"]) / _tcfg["gold_output"])
 SILVER_DIR: Path = Path(_cfg["paths"]["silver"])
-MUNICIPIOS_ESPERADOS: int = _tcfg["municipios_esperados"]
-POP_TOTAL_MIN: float = _tcfg["pop_total_min"]
-POP_TOTAL_MAX: float = _tcfg["pop_total_max"]
 
 CONTRATOS_QUALIDADE: List[dict] = _tcfg["contratos_qualidade"]
 
@@ -61,7 +59,7 @@ def _carregar_datasets(storage: StorageBackend) -> Dict[str, pd.DataFrame]:
         FileNotFoundError: se algum arquivo não existir no Silver.
     """
     datasets = {}
-    for nome, filename in SILVER_INPUTS.items():
+    for nome, filename in _SILVER_INPUTS.items():
         path = str(SILVER_DIR / filename)
         if not Path(path).exists():
             raise FileNotFoundError(
@@ -74,13 +72,11 @@ def _carregar_datasets(storage: StorageBackend) -> Dict[str, pd.DataFrame]:
     return datasets
 
 
-
 def _validar_entradas(datasets: Dict[str, pd.DataFrame]) -> None:
     """
     Valida shape e consistência dos datasets de entrada.
 
     Verifica:
-    - Número de municípios (deve ser igual a municipios_esperados no config)
     - Consistência de CD_MUN entre todos os datasets
     - Ausência de duplicatas na chave CD_MUN
 
@@ -90,18 +86,20 @@ def _validar_entradas(datasets: Dict[str, pd.DataFrame]) -> None:
     chaves_referencia = set(datasets["basico"]["CD_MUN"].tolist())
 
     for nome, df in datasets.items():
-        _checar_contagem(nome, df)
+        _checar_vazio(nome, df)
         _checar_consistencia_chaves(nome, df, chaves_referencia)
         _checar_duplicatas(nome, df)
 
-    logger.info("Validação de entradas OK: %d municípios em todos os datasets", MUNICIPIOS_ESPERADOS)
+    logger.info(
+        "Validação de entradas OK: %d municípios em todos os datasets",
+        len(chaves_referencia),
+    )
 
 
-def _checar_contagem(nome: str, df: pd.DataFrame) -> None:
-    n = len(df)
-    if n != MUNICIPIOS_ESPERADOS:
+def _checar_vazio(nome: str, df: pd.DataFrame) -> None:
+    if df.empty:
         raise ValueError(
-            f"Dataset '{nome}' tem {n} registros, esperado {MUNICIPIOS_ESPERADOS}. "
+            f"Dataset '{nome}' está vazio. "
             f"Execute o extract novamente: make run-socioeconomico-extract"
         )
 
@@ -179,8 +177,8 @@ def _adicionar_metadados(df: pd.DataFrame) -> pd.DataFrame:
     """Adiciona colunas de rastreabilidade ao DataFrame final."""
     df = df.copy()
     df["ano_referencia"] = 2022
-    df["fonte"]          = "IBGE Censo Demográfico 2022"
-    df["uf"]             = "PB"
+    df["fonte"] = "IBGE Censo Demográfico 2022"
+    df["uf"] = df["CD_MUN"].map(sigla_uf_por_codigo_municipio)
     return df
 
 
@@ -212,19 +210,11 @@ def _validar_saida(df: pd.DataFrame) -> List[str]:
     """
     avisos: List[str] = []
 
-    avisos += _checar_contagem_saida(df)
     avisos += _checar_nulos(df)
     avisos += _checar_ranges(df)
     avisos += _checar_consistencia_etaria(df)
-    avisos += _checar_benchmark_populacao(df)
 
     return avisos
-
-
-def _checar_contagem_saida(df: pd.DataFrame) -> List[str]:
-    if len(df) != MUNICIPIOS_ESPERADOS:
-        return [f"CRÍTICO: {len(df)} municípios no output, esperado {MUNICIPIOS_ESPERADOS}"]
-    return []
 
 
 def _checar_nulos(df: pd.DataFrame) -> List[str]:
@@ -281,30 +271,12 @@ def _checar_consistencia_etaria(df: pd.DataFrame) -> List[str]:
     return []
 
 
-def _checar_benchmark_populacao(df: pd.DataFrame) -> List[str]:
-    """
-    Valida a soma da população total contra o benchmark da PB.
-
-    v0001 conta domicílios particulares — diferença de ~85k para o
-    total oficial do IBGE é esperada e está documentada no config.
-    """
-    pop_total = df["total_populacao"].sum()
-    if not (POP_TOTAL_MIN <= pop_total <= POP_TOTAL_MAX):
-        return [
-            f"Pop total PB fora do range esperado "
-            f"({POP_TOTAL_MIN:,.0f}–{POP_TOTAL_MAX:,.0f}): {pop_total:,.0f}. "
-            f"Verifique se o filtro CD_UF==25 foi aplicado corretamente."
-        ]
-    return []
-
-
 def run(storage: Optional[StorageBackend] = None) -> TransformResult:
     """
     Executa o transform completo: Silver → indicadores → validação → Gold.
 
     Falha explicitamente (ValueError/FileNotFoundError) se:
     - Algum arquivo Silver estiver ausente
-    - O número de municípios for diferente do esperado
     - Houver duplicatas ou chaves inconsistentes entre datasets
 
     Emite avisos (sem falhar) se:

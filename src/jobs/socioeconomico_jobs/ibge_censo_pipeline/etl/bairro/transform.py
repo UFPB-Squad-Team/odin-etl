@@ -5,8 +5,7 @@ Mesma lógica do transform de município — só muda a granularidade.
 Reutiliza integralmente as funções de indicadores.py.
 
 Nota: o IBGE disponibiliza dados de bairro apenas para municípios com
-bairros oficialmente delimitados (~194 bairros na PB, concentrados em
-João Pessoa, Campina Grande e outras cidades maiores).
+bairros oficialmente delimitados.
 """
 import logging
 from dataclasses import dataclass, field
@@ -16,6 +15,7 @@ from typing import Dict, List, Optional
 import pandas as pd
 import yaml
 
+from src.common.ibge_codes import sigla_uf_por_codigo_municipio
 from src.common.storage import StorageBackend, get_storage_backend
 from src.jobs.socioeconomico_jobs.ibge_censo_pipeline import indicadores
 
@@ -32,17 +32,19 @@ def _load_config() -> dict:
 _cfg = _load_config()
 
 SILVER_DIR: Path = Path(_cfg["paths"]["silver"])
-GOLD_OUTPUT: str = str(Path(_cfg["paths"]["gold"]) / "bairro_socioeconomico_pb.parquet")
+GOLD_OUTPUT: str = str(
+    Path(_cfg["paths"]["gold"]) / "bairro_socioeconomico_nordeste.parquet"
+)
 
 _SILVER_INPUTS = {
-    "basico":       "ibge_censo2022_bairro_basico_pb.parquet",
-    "demografia":   "ibge_censo2022_bairro_demografia_pb.parquet",
-    "cor_raca":     "ibge_censo2022_bairro_cor_ou_raca_pb.parquet",
-    "dom1":         "ibge_censo2022_bairro_caracteristicas_domicilio1_pb.parquet",
-    "dom2":         "ibge_censo2022_bairro_caracteristicas_domicilio2_pb.parquet",
-    "alfabetizacao":"ibge_censo2022_bairro_alfabetizacao_pb.parquet",
-    "parentesco":   "ibge_censo2022_bairro_parentesco_pb.parquet",
-    "obitos":       "ibge_censo2022_bairro_obitos_pb.parquet",
+    "basico": "ibge_censo2022_bairro_basico_nordeste.parquet",
+    "demografia": "ibge_censo2022_bairro_demografia_nordeste.parquet",
+    "cor_raca": "ibge_censo2022_bairro_cor_ou_raca_nordeste.parquet",
+    "dom1": "ibge_censo2022_bairro_caracteristicas_domicilio1_nordeste.parquet",
+    "dom2": "ibge_censo2022_bairro_caracteristicas_domicilio2_nordeste.parquet",
+    "alfabetizacao": "ibge_censo2022_bairro_alfabetizacao_nordeste.parquet",
+    "parentesco": "ibge_censo2022_bairro_parentesco_nordeste.parquet",
+    "obitos": "ibge_censo2022_bairro_obitos_nordeste.parquet",
 }
 
 _CHAVE          = "CD_BAIRRO"
@@ -128,6 +130,15 @@ def _validar_saida(df: pd.DataFrame) -> List[str]:
     return avisos
 
 
+def _adicionar_metadados(df: pd.DataFrame) -> pd.DataFrame:
+    """Adiciona metadados e deriva a UF a partir do código do município."""
+    df = df.copy()
+    df["ano_referencia"] = 2022
+    df["fonte"] = "IBGE Censo Demográfico 2022"
+    df["uf"] = df["CD_MUN"].map(sigla_uf_por_codigo_municipio)
+    return df
+
+
 def run(storage: Optional[StorageBackend] = None) -> TransformResult:
     storage = storage or get_storage_backend()
 
@@ -142,9 +153,7 @@ def run(storage: Optional[StorageBackend] = None) -> TransformResult:
     df = _calcular_todos_indicadores(datasets)
 
     logger.info("3/4 Adicionando metadados...")
-    df["ano_referencia"] = 2022
-    df["fonte"]          = "IBGE Censo Demográfico 2022"
-    df["uf"]             = "PB"
+    df = _adicionar_metadados(df)
 
     logger.info("4/4 Validando e salvando no Gold: %s", GOLD_OUTPUT)
     avisos = _validar_saida(df)
