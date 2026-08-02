@@ -7,8 +7,17 @@ ftp:
   timeout_segundos: 60
   max_tentativas: 3
 
-# Filtro geográfico — código IBGE da UF alvo (Paraíba = 25)
-filtro_uf: "25"
+# Filtro geográfico — códigos IBGE das UFs do Nordeste
+filtro_uf:
+  - "21"  # Maranhão
+  - "22"  # Piauí
+  - "23"  # Ceará
+  - "24"  # Rio Grande do Norte
+  - "25"  # Paraíba
+  - "26"  # Pernambuco
+  - "27"  # Alagoas
+  - "28"  # Sergipe
+  - "29"  # Bahia
 
 csv:
   encoding: "latin-1"
