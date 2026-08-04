@@ -82,24 +82,17 @@ transform_municipio:
   # Chave: nome lógico usado internamente no transform.
   # Valor: nome do arquivo no Silver.
   silver_inputs:
-    basico:       "ibge_censo2022_municipio_basico_pb.parquet"
-    demografia:   "ibge_censo2022_municipio_demografia_pb.parquet"
-    cor_raca:     "ibge_censo2022_municipio_cor_ou_raca_pb.parquet"
-    dom2:         "ibge_censo2022_municipio_caracteristicas_domicilio2_pb.parquet"
-    dom1:         "ibge_censo2022_municipio_caracteristicas_domicilio1_pb.parquet"
-    alfabetizacao: "ibge_censo2022_municipio_alfabetizacao_pb.parquet"
-    parentesco:   "ibge_censo2022_municipio_parentesco_pb.parquet"
-    obitos:       "ibge_censo2022_municipio_obitos_pb.parquet"
+    basico:       "ibge_censo2022_municipio_basico_nordeste.parquet"
+    demografia:   "ibge_censo2022_municipio_demografia_nordeste.parquet"
+    cor_raca:     "ibge_censo2022_municipio_cor_ou_raca_nordeste.parquet"
+    dom2:         "ibge_censo2022_municipio_caracteristicas_domicilio2_nordeste.parquet"
+    dom1:         "ibge_censo2022_municipio_caracteristicas_domicilio1_nordeste.parquet"
+    alfabetizacao: "ibge_censo2022_municipio_alfabetizacao_nordeste.parquet"
+    parentesco:   "ibge_censo2022_municipio_parentesco_nordeste.parquet"
+    obitos:       "ibge_censo2022_municipio_obitos_nordeste.parquet"
 
-  gold_output: "municipio_socioeconomico_pb.parquet"
+  gold_output: "municipio_socioeconomico_nordeste.parquet"
 
-  # Número esperado de municípios da PB no Censo 2022.
-  municipios_esperados: 223
-
-  # Range de benchmark para a população total da PB.
-  # v0001 conta domicílios particulares — diferença de ~85k para o oficial é esperada.
-  pop_total_min: 3_800_000
-  pop_total_max: 4_200_000
   # Contratos de qualidade derivados da EDA estatística.
   # Ranges validados contra dados oficiais do IBGE.
   # Se um valor sair do range, o dado está errado — não o range.

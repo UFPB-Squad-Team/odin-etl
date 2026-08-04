@@ -6,6 +6,7 @@ from typing import Dict, List, Optional
 import pandas as pd
 import yaml
 
+from src.common.ibge_codes import sigla_uf_por_codigo_municipio
 from src.common.storage import StorageBackend, get_storage_backend
 from src.jobs.socioeconomico_jobs.ibge_censo_pipeline import indicadores
 
@@ -22,25 +23,24 @@ def _load_config() -> dict:
 _cfg = _load_config()
 
 SILVER_DIR: Path = Path(_cfg["paths"]["silver"])
-GOLD_OUTPUT: str = str(Path(_cfg["paths"]["gold"]) / "setor_socioeconomico_pb.parquet")
+GOLD_OUTPUT: str = str(
+    Path(_cfg["paths"]["gold"]) / "setor_socioeconomico_nordeste.parquet"
+)
 
 # Datasets disponíveis para setor (sem parentesco — não existe no FTP para setor)
 _SILVER_INPUTS = {
-    "basico":       "ibge_censo2022_setor_basico_pb.parquet",
-    "demografia":   "ibge_censo2022_setor_demografia_pb.parquet",
-    "cor_raca":     "ibge_censo2022_setor_cor_ou_raca_pb.parquet",
-    "dom1":         "ibge_censo2022_setor_caracteristicas_domicilio1_pb.parquet",
-    "dom2":         "ibge_censo2022_setor_caracteristicas_domicilio2_pb.parquet",
-    "alfabetizacao":"ibge_censo2022_setor_alfabetizacao_pb.parquet",
-    "parentesco":   "ibge_censo2022_setor_parentesco_pb.parquet",
-    "obitos":       "ibge_censo2022_setor_obitos_pb.parquet",
+    "basico": "ibge_censo2022_setor_basico_nordeste.parquet",
+    "demografia": "ibge_censo2022_setor_demografia_nordeste.parquet",
+    "cor_raca": "ibge_censo2022_setor_cor_ou_raca_nordeste.parquet",
+    "dom1": "ibge_censo2022_setor_caracteristicas_domicilio1_nordeste.parquet",
+    "dom2": "ibge_censo2022_setor_caracteristicas_domicilio2_nordeste.parquet",
+    "alfabetizacao": "ibge_censo2022_setor_alfabetizacao_nordeste.parquet",
+    "parentesco": "ibge_censo2022_setor_parentesco_nordeste.parquet",
+    "obitos": "ibge_censo2022_setor_obitos_nordeste.parquet",
 }
 
 _CHAVE = "CD_SETOR"
 _COLUNA_AUXILIAR = "total_domicilios_particulares"
-
-SETORES_MIN = 9_000
-SETORES_MAX = 10_500
 
 
 @dataclass
@@ -111,15 +111,22 @@ def _calcular_todos_indicadores(datasets: Dict[str, pd.DataFrame]) -> pd.DataFra
 
 def _validar_saida(df: pd.DataFrame) -> List[str]:
     avisos = []
-    n = len(df)
-    if not (SETORES_MIN <= n <= SETORES_MAX):
-        avisos.append(f"Número de setores fora do esperado ({SETORES_MIN}–{SETORES_MAX}): {n}")
-
+    if df.empty:
+        avisos.append("Nenhum setor encontrado — verifique o extract.")
     pop_total = df["total_populacao"].sum()
-    if not (3_800_000 <= pop_total <= 4_200_000):
-        avisos.append(f"Pop total fora do range esperado: {pop_total:,.0f}")
+    if pop_total <= 0:
+        avisos.append("População total zerada — verifique os dados do Silver.")
 
     return avisos
+
+
+def _adicionar_metadados(df: pd.DataFrame) -> pd.DataFrame:
+    """Adiciona metadados e deriva a UF a partir do código do município."""
+    df = df.copy()
+    df["ano_referencia"] = 2022
+    df["fonte"] = "IBGE Censo Demográfico 2022"
+    df["uf"] = df["CD_MUN"].map(sigla_uf_por_codigo_municipio)
+    return df
 
 
 def run(storage: Optional[StorageBackend] = None) -> TransformResult:
@@ -136,9 +143,7 @@ def run(storage: Optional[StorageBackend] = None) -> TransformResult:
     df = _calcular_todos_indicadores(datasets)
 
     logger.info("3/4 Adicionando metadados...")
-    df["ano_referencia"] = 2022
-    df["fonte"]          = "IBGE Censo Demográfico 2022"
-    df["uf"]             = "PB"
+    df = _adicionar_metadados(df)
 
     logger.info("4/4 Validando e salvando no Gold: %s", GOLD_OUTPUT)
     avisos = _validar_saida(df)
