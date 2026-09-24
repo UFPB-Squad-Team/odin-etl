@@ -29,7 +29,7 @@ from src.common.utils import load_config
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - [%(levelname)s] - %(message)s")
 
-SETORES_GPKG = "data/silver/setores_pb.gpkg"
+SETORES_GPKG = "data/silver/setores_nordeste.gpkg"
 
 # Tipos de setor que fazem sentido receber indicadores de escolas
 TIPOS_VALIDOS = {"0", "1"}  # comum e aglomerado subnormal
@@ -92,9 +92,23 @@ def run(
     if gdf_escolas.crs.to_epsg() != 4326:
         gdf_escolas = gdf_escolas.to_crs("EPSG:4326")
 
-    # 2. Spatial join: escola (ponto) → setor (polígono)
+    # 2. Spatial join: escola (ponto) → setor (polígono) — chunked por UF
     logger.info(f"Spatial join: {len(gdf_escolas)} escolas × {len(gdf_setores)} setores...")
-    gdf_joined = gpd.sjoin(gdf_escolas, gdf_setores, how="inner", predicate="within")
+
+    from src.common.spatial_utils import spatial_join_por_uf
+
+    # Precisamos da coluna SG_UF nos pontos para chunking
+    if "SG_UF" not in gdf_escolas.columns and "CO_ENTIDADE" in gdf_escolas.columns:
+        # Tentar inferir de df_censo
+        gdf_joined = gpd.sjoin(gdf_escolas, gdf_setores, how="inner", predicate="within")
+    else:
+        gdf_joined = spatial_join_por_uf(
+            gdf_pontos=gdf_escolas,
+            gdf_poligonos=gdf_setores,
+            coluna_uf_pontos="SG_UF",
+            coluna_uf_poligonos="UF",
+            predicate="within",
+        )
 
     sem_setor = len(gdf_escolas) - len(gdf_joined)
     if sem_setor > 0:
@@ -205,9 +219,11 @@ def run(
                 lambda v: None if (v is None or str(v).strip().lower() in ("nan", "")) else str(v).strip()
             )
 
-    # 7. Converter polígono para GeoJSON
+    # 7. Converter polígono para GeoJSON (simplificado ~55m para caber no cluster
+    #    mantendo forma visível no mapa, e reparar geometrias inválidas rejeitadas
+    #    pelo índice 2dsphere).
     df_final["geometria"] = df_final["geometry"].apply(
-        lambda g: poligono_para_geojson(g) if g is not None and not pd.isna(g) else None
+        lambda g: poligono_para_geojson(g, simplify_tolerance=0.0005) if g is not None and not pd.isna(g) else None
     )
     df_final = df_final.drop(columns=["geometry", "CD_TIPO"], errors="ignore")
 

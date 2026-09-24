@@ -3,7 +3,7 @@ paths:
   silver: "data/silver"
   gold:   "data/gold"
 
-filtro_uf: "PB"
+filtro_uf: ["MA", "PI", "CE", "RN", "PB", "PE", "AL", "SE", "BA"]
 
 # Dependências administrativas a incluir (exclui privadas — sem geocodificação disponível)
 # 1=Federal, 2=Estadual, 3=Municipal, 4=Privada

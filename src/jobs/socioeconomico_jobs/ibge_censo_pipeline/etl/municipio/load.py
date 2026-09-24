@@ -170,14 +170,15 @@ def run(df: pd.DataFrame = None, storage: StorageBackend = None) -> int:
 
         if operacoes:
             try:
-                resultado = collection.bulk_write(operacoes, ordered=False)
-                total_processado = resultado.upserted_count + resultado.modified_count
+                from src.common.bulk_write import batched_bulk_write
+                resultado = batched_bulk_write(collection, operacoes, batch_size=5000)
+                total_processado = resultado.total
                 
                 logger.info(f"Inserções novas: {resultado.upserted_count}")
                 logger.info(f"Atualizações realizadas: {resultado.modified_count}")
                 
-            except BulkWriteError as e:
-                logger.error(f"Erro no bulk write MongoDB: {e.details}")
+            except Exception as e:
+                logger.error(f"Erro no bulk write MongoDB: {e}")
                 raise
         else:
             logger.warning("Nenhum município processado. DataFrame vazio.")

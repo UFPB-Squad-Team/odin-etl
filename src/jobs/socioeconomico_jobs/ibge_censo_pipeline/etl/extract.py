@@ -373,16 +373,26 @@ def run(
     resultados: Dict[str, List[str]] = {g: [] for g in granularidades}
     erros: List[str] = []
 
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     for granularidade in granularidades:
         logger.info("Granularidade: %s", granularidade.upper())
-        for dataset in datasets:
-            try:
-                path = baixar_dataset(dataset, granularidade, storage)
-                resultados[granularidade].append(path)
-            except Exception as exc:
-                msg = f"{granularidade}/{dataset}: {exc}"
-                logger.error("ERRO — %s", msg)
-                erros.append(msg)
+
+        futures = {}
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            for dataset in datasets:
+                future = executor.submit(baixar_dataset, dataset, granularidade, storage)
+                futures[future] = dataset
+
+            for future in as_completed(futures):
+                dataset = futures[future]
+                try:
+                    path = future.result()
+                    resultados[granularidade].append(path)
+                except Exception as exc:
+                    msg = f"{granularidade}/{dataset}: {exc}"
+                    logger.error("ERRO — %s", msg)
+                    erros.append(msg)
 
     _logar_resumo(resultados, erros, total_esperado)
     return resultados

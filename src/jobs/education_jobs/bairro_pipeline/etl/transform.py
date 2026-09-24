@@ -15,13 +15,13 @@ logging.basicConfig(
     format="%(asctime)s - [%(levelname)s] - %(message)s",
 )
 
-BAIRROS_GPKG = "data/silver/bairros_pb.gpkg"
+BAIRROS_GPKG = "data/silver/bairros_nordeste.gpkg"
 
 
 def _extrair_coordenadas(df_gold: pd.DataFrame) -> pd.DataFrame:
     """
-    Extrai latitude e longitude do campo 'documento.localizacao.coordinates'
-    e retorna DataFrame com CO_ENTIDADE, latitude, longitude.
+    Extrai latitude, longitude e UF do campo 'documento.localizacao.coordinates'
+    e retorna DataFrame com CO_ENTIDADE, latitude, longitude, SG_UF.
     """
     registros = []
     for _, row in df_gold.iterrows():
@@ -43,6 +43,7 @@ def _extrair_coordenadas(df_gold: pd.DataFrame) -> pd.DataFrame:
             "CO_ENTIDADE": str(escola_id),
             "longitude": float(lon),
             "latitude": float(lat),
+            "SG_UF": doc.get("estadoSigla") or row.get("estadoSigla"),
         })
     return pd.DataFrame(registros)
 
@@ -91,9 +92,21 @@ def run(storage: StorageBackend = None) -> pd.DataFrame:
         gdf_bairros = gdf_bairros.to_crs("EPSG:4326")
     logger.info(f"Polígonos de bairros carregados: {len(gdf_bairros)}")
 
-    # 3. Spatial join: escola (ponto) → bairro (polígono)
-    logger.info("Executando spatial join escolas × bairros...")
-    gdf_joined = gpd.sjoin(gdf_escolas, gdf_bairros, how="inner", predicate="within")
+    # 3. Spatial join: escola (ponto) → bairro (polígono) — chunked por UF
+    logger.info("Executando spatial join escolas × bairros (chunked por UF)...")
+
+    from src.common.spatial_utils import spatial_join_por_uf
+
+    if "SG_UF" in gdf_escolas.columns:
+        gdf_joined = spatial_join_por_uf(
+            gdf_pontos=gdf_escolas,
+            gdf_poligonos=gdf_bairros,
+            coluna_uf_pontos="SG_UF",
+            coluna_uf_poligonos="UF",
+            predicate="within",
+        )
+    else:
+        gdf_joined = gpd.sjoin(gdf_escolas, gdf_bairros, how="inner", predicate="within")
 
     sem_bairro = len(gdf_escolas) - len(gdf_joined)
     if sem_bairro > 0:
@@ -104,8 +117,7 @@ def run(storage: StorageBackend = None) -> pd.DataFrame:
     logger.info(f"Carregando Silver do censo de: {silver_path}")
     df_censo = storage.read_parquet(silver_path)
     df_censo["CO_ENTIDADE"] = df_censo["CO_ENTIDADE"].astype(str)
-    if "SG_UF" in df_censo.columns:
-        df_censo = df_censo[df_censo["SG_UF"] == "PB"].copy()
+    # Sem filtro de UF — processamos todo o Nordeste
 
     ideb_rows = []
     for _, row in df_gold.iterrows():

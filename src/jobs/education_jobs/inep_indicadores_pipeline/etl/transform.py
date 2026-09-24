@@ -185,7 +185,7 @@ def _renomear_colunas(dados: dict[str, pd.DataFrame], cfg: dict) -> dict[str, pd
     return renomeados
 
 
-def _validar_saida(df: pd.DataFrame, filtro_uf: str) -> list[str]:
+def _validar_saida(df: pd.DataFrame, filtro_uf: list | str) -> list[str]:
     """Valida o DataFrame de saída contra contratos de qualidade."""
     avisos = []
 
@@ -196,13 +196,21 @@ def _validar_saida(df: pd.DataFrame, filtro_uf: str) -> list[str]:
     if "CO_ENTIDADE" not in df.columns:
         avisos.append("CRÍTICO: coluna CO_ENTIDADE ausente")
 
-    if len(df) < 3_000:
-        avisos.append(f"Poucas escolas: {len(df)} (esperado ~3.700 para PB)")
+    if isinstance(filtro_uf, list):
+        esperado_min = len(filtro_uf) * 3_000
+        if len(df) < esperado_min:
+            avisos.append(f"Poucas escolas: {len(df)} (esperado ~{esperado_min}+ para {len(filtro_uf)} UFs)")
+    else:
+        if len(df) < 3_000:
+            avisos.append(f"Poucas escolas: {len(df)} (esperado ~3.700 para uma UF)")
 
     if "SG_UF" in df.columns:
-        outras_ufs = df[df["SG_UF"] != filtro_uf]["SG_UF"].unique()
+        if isinstance(filtro_uf, list):
+            outras_ufs = df[~df["SG_UF"].isin(filtro_uf)]["SG_UF"].unique()
+        else:
+            outras_ufs = df[df["SG_UF"] != filtro_uf]["SG_UF"].unique()
         if len(outras_ufs) > 0:
-            avisos.append(f"Escolas de outras UFs encontradas: {outras_ufs}")
+            avisos.append(f"Escolas de UFs inesperadas encontradas: {outras_ufs}")
 
     return avisos
 

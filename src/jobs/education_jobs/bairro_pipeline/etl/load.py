@@ -159,7 +159,8 @@ def run(df_indicadores: pd.DataFrame) -> None:
             )
 
         if operacoes:
-            resultado = colecao.bulk_write(operacoes, ordered=False)
+            from src.common.bulk_write import batched_bulk_write
+            resultado = batched_bulk_write(colecao, operacoes, batch_size=5000)
             logger.info(
                 f"Upsert concluído: {resultado.upserted_count} inseridos, "
                 f"{resultado.modified_count} atualizados."

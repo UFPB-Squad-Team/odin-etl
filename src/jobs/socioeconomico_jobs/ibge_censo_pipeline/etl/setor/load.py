@@ -39,8 +39,8 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - [%(levelname)s] - %(message)s")
 
 _COLECAO    = "setor_indicadores"
-_GPKG_PATH  = Path("data/silver/setores_pb.gpkg")
-_GOLD_PATH  = Path("data/gold/setor_socioeconomico_pb.parquet")
+_GPKG_PATH  = Path("data/silver/setores_nordeste.gpkg")
+_GOLD_PATH  = Path("data/gold/setor_socioeconomico_nordeste.parquet")
 
 
 # ---------------------------------------------------------------------------
@@ -90,12 +90,17 @@ def _carregar_geometrias() -> Dict[str, dict]:
     logger.info("Carregando geometrias: %s", _GPKG_PATH)
     gdf = gpd.read_file(_GPKG_PATH)
 
+    from src.common.spatial_utils import poligono_para_geojson
+
+    # Simplificar (~55m) e reparar geometrias inválidas. Setores são 122k polígonos;
+    # tolerância mais agressiva mantém a forma para visualização no mapa e cabe no
+    # cluster. Reparo (make_valid) evita rejeição pelo índice 2dsphere.
     geometrias = {
-        str(row["CD_SETOR"]): mapping(row["geometry"])
+        str(row["CD_SETOR"]): poligono_para_geojson(row["geometry"], simplify_tolerance=0.0005)
         for _, row in gdf.iterrows()
         if row["geometry"] is not None
     }
-    logger.info("  %d geometrias carregadas", len(geometrias))
+    logger.info("  %d geometrias carregadas (simplificadas)", len(geometrias))
     return geometrias
 
 
@@ -201,10 +206,13 @@ def run(df: Optional[pd.DataFrame] = None, storage=None) -> int:
     try:
         colecao = client[db_name][_COLECAO]
 
-        colecao.create_index("cd_setor", unique=True, sparse=True)
-        colecao.create_index("cd_municipio")
-        colecao.create_index("uf", sparse=True)
-        colecao.create_index([("geometria", "2dsphere")], sparse=True)
+        try:
+            colecao.create_index("cd_setor", unique=True, sparse=True)
+            colecao.create_index("cd_municipio")
+            colecao.create_index("uf", sparse=True)
+            colecao.create_index([("geometria", "2dsphere")], sparse=True)
+        except Exception as idx_err:
+            logger.debug("Índices já existem ou conflito de nome (ok): %s", idx_err)
 
         operacoes = []
         sem_geom = 0
@@ -243,8 +251,9 @@ def run(df: Optional[pd.DataFrame] = None, storage=None) -> int:
             logger.warning("Nenhuma operação gerada.")
             return 0
 
-        resultado = colecao.bulk_write(operacoes, ordered=False)
-        total = resultado.upserted_count + resultado.modified_count
+        from src.common.bulk_write import batched_bulk_write
+        resultado = batched_bulk_write(colecao, operacoes, batch_size=5000)
+        total = resultado.total
 
         logger.info("=" * 60)
         logger.info("LOAD CONCLUÍDO")

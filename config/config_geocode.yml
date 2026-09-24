@@ -17,12 +17,12 @@ ingestion_sources:
 
 geocode_pipeline:
   extract:
-    filtro_uf: ["PB"]
+    filtro_uf: ["MA", "PI", "CE", "RN", "PB", "PE", "AL", "SE", "BA"]
     filtro_dependencia_adm: [1, 2, 3]
     filtro_situacao_funcionamento: 1
     csv_delimiter: ";"
     csv_encoding: "latin-1"
-    silver_output: "escolas_pb.parquet"
+    silver_output: "escolas_nordeste.parquet"
 
   transform:
     colunas_endereco:
@@ -34,7 +34,7 @@ geocode_pipeline:
       - "CO_CEP"
       - "NO_MUNICIPIO"
     coluna_endereco_final: "endereco_completo"
-    gold_output: "escolas_pb_geocoded.parquet"
+    gold_output: "escolas_nordeste_geocoded.parquet"
     checkpoint_output: "geocode_progress.parquet"
     batch_size: 100
 
@@ -43,11 +43,9 @@ cep_pipeline:
 
 geo_pipeline:
   ibge:
-    setores_censitarios_url: "https://geoftp.ibge.gov.br/organizacao_do_territorio/malhas_territoriais/malhas_de_setores_censitarios__divisoes_intramunicipais/censo_2022/setores_censitarios_shp/pb/pb_setores_censitarios.zip"
-    municipios_url: "https://geoftp.ibge.gov.br/organizacao_do_territorio/malhas_territoriais/malhas_municipais/municipio_2022/UFs/PB/PB_Municipios_2022.zip"
-    bairros_silver_output: "bairros_pb.gpkg"
-    setores_silver_output: "setores_pb.gpkg"
-    municipios_silver_output: "municipios_pb.parquet"
+    bairros_silver_output: "bairros_nordeste.gpkg"
+    setores_silver_output: "setores_nordeste.gpkg"
+    municipios_silver_output: "municipios_nordeste.gpkg"
 
   colunas_metricas:
     matriculas: ["QT_MAT_FUND", "QT_MAT_MED", "QT_MAT_INF"]
@@ -88,6 +86,6 @@ inep_resultados_pipeline:
       - "VL_OBSERVADO_2023"   # IDEB observado
       - "VL_META_2023"        # Meta IDEB
 
-  gold_output: "escolas_pb_com_indicadores.parquet"
+  gold_output: "escolas_nordeste_com_indicadores.parquet"
   mongodb:
     colecao: "escolas"        # mesmo upsert da geocode pipeline — enriquece o documento

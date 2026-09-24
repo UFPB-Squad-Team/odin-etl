@@ -115,7 +115,7 @@ class TestLoadMunicipioSocioeconomico:
         doc = client["test_odin"]["municipio_indicadores"].find_one(
             {"municipioIdIbge": 2507507}
         )
-        val = doc["socioeconomico"]["populacao"]["totalDomiciliosParticulares"]
+        val = doc["socioeconomico"]["populacao"]["totalDomicilios"]
         assert val is None
 
     def test_upsert_idempotente(self, mock_env, df_gold):

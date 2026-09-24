@@ -104,14 +104,14 @@ def _extrair_xlsx_do_zip(zip_path: Path) -> bytes:
             return f.read()
 
 
-def _ler_xlsx_inep(xlsx_bytes: bytes, header_row: int, filtro_uf: str) -> pd.DataFrame:
+def _ler_xlsx_inep(xlsx_bytes: bytes, header_row: int, filtro_uf: list | str) -> pd.DataFrame:
     """
-    Lê o XLSX do INEP, aplica o header correto e filtra pela UF.
+    Lê o XLSX do INEP, aplica o header correto e filtra pela(s) UF(s).
 
     Tratamentos aplicados (descobertos na EDA):
     - Header row varia por arquivo (8, 9 ou 10)
     - Sentinela '--' → None (escola sem aquela etapa de ensino)
-    - Filtra pela UF configurada
+    - Filtra pela(s) UF(s) configurada(s)
     """
     df = pd.read_excel(
         io.BytesIO(xlsx_bytes),
@@ -122,7 +122,10 @@ def _ler_xlsx_inep(xlsx_bytes: bytes, header_row: int, filtro_uf: str) -> pd.Dat
     df = df.replace(_SENTINELA_AUSENTE, None)
 
     if "SG_UF" in df.columns:
-        df = df[df["SG_UF"] == filtro_uf].copy()
+        if isinstance(filtro_uf, list):
+            df = df[df["SG_UF"].isin(filtro_uf)].copy()
+        else:
+            df = df[df["SG_UF"] == filtro_uf].copy()
         logger.info("  Registros %s: %d", filtro_uf, len(df))
     else:
         logger.warning("  Coluna SG_UF não encontrada — mantendo todos os registros")
@@ -133,7 +136,7 @@ def _ler_xlsx_inep(xlsx_bytes: bytes, header_row: int, filtro_uf: str) -> pd.Dat
 def baixar_fonte(
     fonte: FonteConfig,
     bronze_dir: Path,
-    filtro_uf: str,
+    filtro_uf: list | str,
     filtro_dependencias: Optional[list[str]] = None,
     storage: Optional[StorageBackend] = None,
 ) -> pd.DataFrame:

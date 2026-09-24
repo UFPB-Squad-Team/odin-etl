@@ -1,7 +1,7 @@
-import json
 import logging
 from pathlib import Path
 
+import geopandas as gpd
 import pandas as pd
 
 from src.common.cep_lookup import enriquecer_com_cep
@@ -15,23 +15,19 @@ logging.basicConfig(
     format="%(asctime)s - [%(levelname)s] - %(message)s",
 )
 
-MUNICIPIOS_GEOJSON = "data/silver/geojs-25-mun (1).json"
+MUNICIPIOS_GPKG = "data/silver/municipios_nordeste.gpkg"
 
 
 def _carregar_poligonos_municipios() -> dict:
     """
-    Carrega o GeoJSON de municípios da PB e retorna um dict
+    Carrega o GeoPackage de municípios do Nordeste e retorna um dict
     {codigo_ibge: geometry_dict} para lookup rápido.
 
-    Geometrias inválidas (ex: Polygon com anéis não contidos) são
-    corrigidas via Shapely antes de retornar.
+    Geometrias inválidas são corrigidas via Shapely antes de retornar.
     """
-    if not Path(MUNICIPIOS_GEOJSON).exists():
-        logger.warning(f"GeoJSON de municípios não encontrado: {MUNICIPIOS_GEOJSON}. Usando apenas centróides.")
+    if not Path(MUNICIPIOS_GPKG).exists():
+        logger.warning(f"GeoPackage de municípios não encontrado: {MUNICIPIOS_GPKG}. Usando apenas centróides.")
         return {}
-
-    with open(MUNICIPIOS_GEOJSON, encoding="utf-8") as f:
-        geojson = json.load(f)
 
     try:
         from shapely.geometry import shape, mapping
@@ -41,26 +37,45 @@ def _carregar_poligonos_municipios() -> dict:
         use_shapely = False
         logger.warning("Shapely não disponível — geometrias inválidas não serão corrigidas.")
 
+    logger.info(f"Carregando GeoPackage de municípios: {MUNICIPIOS_GPKG}")
+    gdf = gpd.read_file(MUNICIPIOS_GPKG)
+    if gdf.crs is None or gdf.crs.to_epsg() != 4326:
+        gdf = gdf.to_crs("EPSG:4326")
+
     poligonos = {}
     corrigidos = 0
-    for feature in geojson.get("features", []):
-        props = feature.get("properties", {})
-        codigo = str(props.get("id", "")).strip()
-        geometry = feature.get("geometry")
-        if not codigo or not geometry:
+
+    # Tentar identificar a coluna de código do município
+    col_codigo = None
+    for candidate in ["CD_MUN", "CD_GEOCMU", "CD_GEOCODM", "GEOCODIGO", "codarea"]:
+        if candidate in gdf.columns:
+            col_codigo = candidate
+            break
+
+    if col_codigo is None:
+        logger.warning("Nenhuma coluna de código de município identificada no GPKG. Colunas: %s", list(gdf.columns))
+        return {}
+
+    for _, row in gdf.iterrows():
+        codigo = str(row[col_codigo]).strip()
+        geometry = row.get("geometry")
+        if not codigo or geometry is None:
             continue
 
         if use_shapely:
             try:
-                geom = shape(geometry)
+                geom = shape(mapping(geometry))
                 if not geom.is_valid:
                     geom = make_valid(geom)
                     corrigidos += 1
-                geometry = mapping(geom)
+                geom_dict = mapping(geom)
             except Exception as e:
                 logger.warning(f"Não foi possível corrigir geometria do município {codigo}: {e}")
+                geom_dict = mapping(geometry)
+        else:
+            geom_dict = mapping(geometry)
 
-        poligonos[codigo] = geometry
+        poligonos[codigo] = geom_dict
 
     if corrigidos > 0:
         logger.info(f"Geometrias corrigidas via Shapely: {corrigidos}")
@@ -144,54 +159,94 @@ def run(storage: StorageBackend = None) -> pd.DataFrame:
             logger.info("Indicadores INEP adicionados: %d escolas com dados",
                         df_ideb["ideb_anos_iniciais"].notna().sum())
 
-    # 2. Enriquecer com município padronizado via CEP
-    df = enriquecer_com_cep(df_escolas, cep_path=cep_path)
+    # 2. Município direto do Censo Escolar (CO_MUNICIPIO/NO_MUNICIPIO — 100% preenchido)
+    # Não dependemos mais de CEP: o código IBGE do município vem no próprio microdado.
+    if "CO_MUNICIPIO" not in df_escolas.columns:
+        raise ValueError("CO_MUNICIPIO ausente no Silver do censo — necessário para agregação municipal.")
 
-    sem_municipio = df["municipio_cep"].isna().sum()
+    df = df_escolas.copy()
+    df["CO_MUNICIPIO"] = df["CO_MUNICIPIO"].astype(str).str.strip()
+
+    # Merge coordenadas geocodificadas para calcular centróide médio por município
+    if "documento" in df_gold.columns:
+        coord_rows = []
+        for _, row in df_gold.iterrows():
+            doc = row.get("documento")
+            escola_id = row.get("escolaIdInep")
+            if not isinstance(doc, dict):
+                continue
+            loc = doc.get("localizacao")
+            if not isinstance(loc, dict):
+                continue
+            coords = loc.get("coordinates")
+            if coords is None or len(coords) < 2:
+                continue
+            lon, lat = coords[0], coords[1]
+            if lat == -999.0 or lon == -999.0:
+                continue
+            coord_rows.append({"CO_ENTIDADE": str(escola_id), "lat_geo": float(lat), "lon_geo": float(lon)})
+        if coord_rows:
+            df_coords = pd.DataFrame(coord_rows)
+            df = df.merge(df_coords, on="CO_ENTIDADE", how="left")
+
+    sem_municipio = df["CO_MUNICIPIO"].isna().sum()
     if sem_municipio > 0:
-        logger.warning(f"{sem_municipio} escola(s) sem município identificado via CEP.")
-    df = df.dropna(subset=["municipio_cep"]).copy()
+        logger.warning(f"{sem_municipio} escola(s) sem CO_MUNICIPIO.")
+    df = df.dropna(subset=["CO_MUNICIPIO"]).copy()
 
     # 3. Calcular métricas por município
-    logger.info("Calculando indicadores por município...")
+    logger.info("Calculando indicadores por município (chave: CO_MUNICIPIO)...")
     df_indicadores = calcular_indicadores(
         df=df,
-        group_col="municipio_cep",
+        group_col="CO_MUNICIPIO",
         config=metricas,
     )
 
     # 4. Recuperar metadados e centróide por município
-    municipio_meta = df.groupby("municipio_cep").agg(
-        municipioIdIbge=("id_mundv_cep", "first"),
-        sg_uf=("sg_uf", "first") if "sg_uf" in df.columns else ("SG_UF", "first"),
-        total_bairros=("bairro_cep", pd.Series.nunique),
-        lat_media=("lat_cep", "mean"),
-        lon_media=("lon_cep", "mean"),
-    ).reset_index()
+    agg_spec = {
+        "municipio": ("NO_MUNICIPIO", "first"),
+        "sg_uf": ("SG_UF", "first"),
+    }
+    if "lat_geo" in df.columns:
+        agg_spec["lat_media"] = ("lat_geo", "mean")
+        agg_spec["lon_media"] = ("lon_geo", "mean")
 
-    df_final = df_indicadores.merge(municipio_meta, on="municipio_cep", how="left")
-    df_final = df_final.rename(columns={"municipio_cep": "municipio"})
+    municipio_meta = df.groupby("CO_MUNICIPIO").agg(**agg_spec).reset_index()
+    municipio_meta = municipio_meta.rename(columns={"CO_MUNICIPIO": "municipioIdIbge"})
 
-    # 5. Montar centróide GeoJSON
-    df_final["centroide"] = df_final.apply(
-        lambda row: {
-            "type": "Point",
-            "coordinates": [round(float(row["lon_media"]), 7), round(float(row["lat_media"]), 7)]
-        } if pd.notna(row.get("lat_media")) and pd.notna(row.get("lon_media")) else None,
-        axis=1,
-    )
-    df_final = df_final.drop(columns=["lat_media", "lon_media"], errors="ignore")
+    df_indicadores = df_indicadores.rename(columns={"CO_MUNICIPIO": "municipioIdIbge"})
+    df_final = df_indicadores.merge(municipio_meta, on="municipioIdIbge", how="left")
 
-    # 6. Adicionar polígono real do GeoJSON de municípios
+    # 5. Montar centróide GeoJSON (média das coordenadas das escolas)
+    if "lat_media" in df_final.columns:
+        df_final["centroide"] = df_final.apply(
+            lambda row: {
+                "type": "Point",
+                "coordinates": [round(float(row["lon_media"]), 7), round(float(row["lat_media"]), 7)]
+            } if pd.notna(row.get("lat_media")) and pd.notna(row.get("lon_media")) else None,
+            axis=1,
+        )
+        df_final = df_final.drop(columns=["lat_media", "lon_media"], errors="ignore")
+    else:
+        df_final["centroide"] = None
+
+    # 6. Adicionar polígono real do GeoPackage de municípios
     poligonos = _carregar_poligonos_municipios()
     if poligonos:
-        df_final["geometria"] = df_final["municipioIdIbge"].apply(
-            lambda cod: poligonos.get(str(int(cod))) if pd.notna(cod) else None
-        )
+        def _lookup_poligono(cod):
+            if pd.isna(cod):
+                return None
+            cod_str = str(cod).strip()
+            # Tentar match direto e também sem eventual sufixo decimal
+            return poligonos.get(cod_str) or poligonos.get(cod_str.split(".")[0])
+        df_final["geometria"] = df_final["municipioIdIbge"].apply(_lookup_poligono)
         com_poligono = df_final["geometria"].notna().sum()
         logger.info(f"Polígonos associados: {com_poligono}/{len(df_final)} municípios.")
     else:
         df_final["geometria"] = None
+
+    # Converter municipioIdIbge para int (schema espera número)
+    df_final["municipioIdIbge"] = pd.to_numeric(df_final["municipioIdIbge"], errors="coerce").astype("Int64")
 
     logger.info(f"Agregação por município concluída: {len(df_final)} municípios com escolas.")
     return df_final

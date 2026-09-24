@@ -228,7 +228,8 @@ def run(storage: StorageBackend = None):
             )
 
         if operations:
-            result = collection.bulk_write(operations, ordered=False)
+            from src.common.bulk_write import batched_bulk_write
+            result = batched_bulk_write(collection, operations, batch_size=5000)
             logging.info(
                 f"MongoDB upsert complete: "
                 f"{result.upserted_count} inserted, "
